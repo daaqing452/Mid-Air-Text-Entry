@@ -64,7 +64,6 @@
   <ItemGroup>
     <Compile Include="Assets\Decoder.cs" />
     <Compile Include="Assets\Extractor.cs" />
-    <Compile Include="Assets\FingerCollider.cs" />
     <Compile Include="Assets\Keyboard.cs" />
     <Compile Include="Assets\Oculus\AudioManager\Scenes\Scripts\TestScript.cs" />
     <Compile Include="Assets\Oculus\AudioManager\Scripts\Audio\AmbienceEmitter.cs" />

@@ -5,20 +5,23 @@ using UnityEngine;
 
 public class Extractor
 {
-    public Decoder decoder;
-
     // output
     public Vector4 target;
 
-    public Extractor(Decoder decoder) {
-        this.decoder = decoder;
+    public Extractor() { }
+
+    ~Extractor() {
+        Clear();
     }
 
-    public virtual bool Input(Vector4 nowP) { return false; }
+    public virtual int Input(Vector4 p, params object[] args) { return 0; }
+
+    public virtual void Clear() { }
 }
 
-class WhiteBoxExtractor : Extractor {
+class WhiteBoxDepthExtractor : Extractor {
     // thresholds
+    const float TYPE_ZONE_HEIGHT = 0.03f;
     const float DD_THRES = 0.003f;
     const float MIND_NOISE = 0.005f;
 
@@ -27,14 +30,15 @@ class WhiteBoxExtractor : Extractor {
     List<float> dd;
     int l, r;
     
-    public WhiteBoxExtractor(Decoder decoder) : base(decoder) {
+    public WhiteBoxDepthExtractor() : base() {
         p = new List<Vector4>();
-        p.Add(new Vector4(0, 0, 0, decoder.keyboard.TypeZoneDist));
         dd = new List<float>();
-        l = r = -1;
+        Clear();
     }
 
-    public override bool Input(Vector4 nowP) {
+    public override int Input(Vector4 nowP, params object[] args) {
+        bool inTypeZone = (bool)args[1];
+        if (!inTypeZone) nowP.w = TYPE_ZONE_HEIGHT;
         float nowDD = nowP.w - p[p.Count - 1].w;
         p.Add(nowP);
         dd.Add(nowDD);
@@ -59,9 +63,9 @@ class WhiteBoxExtractor : Extractor {
         if (nowDD > DD_THRES && l > -1) {
             GetTarget(l, dd.Count);
             RenewStatus(dd.Count - 1);
-            return true;
+            return 1;
         }
-        return false;
+        return 0;
     }
 
     void GetTarget(int ll, int rr) {
@@ -72,10 +76,39 @@ class WhiteBoxExtractor : Extractor {
         target = p[j];
     }
 
-    void RenewStatus(int c) {
-        //p.RemoveRange(0, c);
-        //dd.RemoveRange(0, c);
-        l = -1;
-        r = -1;
+    void RenewStatus(int deleteBound) {
+        p.RemoveRange(0, deleteBound);
+        dd.RemoveRange(0, deleteBound);
+        l = r = -1;
+    }
+
+    public override void Clear() {
+        p.Clear();
+        p.Add(new Vector4(0, 0, 0, TYPE_ZONE_HEIGHT));
+        dd.Clear();
+        l = r = -1;
+    }
+}
+
+class NaiveGestureExtractor : Extractor {
+    public enum GestureInputState { None, Stay, Enter, Exit };
+    bool gestureTyping = false;
+
+    public NaiveGestureExtractor() : base() { }
+
+    public override int Input(Vector4 p, params object[] args) {
+        bool ifTouchKeyboard = (bool)args[0];
+        bool ifInTypeZone = (bool)args[1];
+        // enter
+        if (!gestureTyping && ifTouchKeyboard) {
+            gestureTyping = true;
+            return (int)GestureInputState.Enter;
+        }
+        // exit
+        if (gestureTyping && !ifInTypeZone) {
+            gestureTyping = false;
+            return (int)GestureInputState.Exit;
+        }
+        return (int)(gestureTyping ? GestureInputState.Stay : GestureInputState.None);
     }
 }

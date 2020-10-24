@@ -7,18 +7,27 @@ using UnityEngine.UI;
 
 public class Keyboard : MonoBehaviour
 {
-    // editor parameters
-    public int DictionarySize = 50000;
-    public float TypeZoneDist = 0.02f;
+    public enum TextEntryMethod { Tap, Gesture };
+    
+    [Header("Configuration")]
+    public TextEntryMethod textEntryMethod = TextEntryMethod.Tap;
+    public int DictionarySize = 10000;
+
+    [Header("Threshold")]
+    public float TypeZoneDistance = 0.03f;
+    public float PinchDistance = 0.015f;
+
+    [Header("Switch")]
     public bool VisualizeFingertip = false;
     public bool VisualizeKeyCentroids = false;
-    
-    // GameObjects
-    GameObject mainCamera, keyboardBase;
+
+    [Header("GameObjects")]
     public GameObject[] keyAnchors;
-    GameObject leftIndexPad, leftIndexTip, leftThumb;
-    GameObject rightIndexPad, rightIndexTip, rightThumb;
-    Touch leftIndexTipTouch, rightIndexTipTouch;
+    public Text[] candidateTexts;
+    public GameObject mainCamera, keyboardBase;
+    public GameObject leftIndexPad, leftIndexTip, leftThumbPad;
+    public GameObject rightIndexPad, rightIndexTip, rightThumbPad;
+    public Touch leftIndexTipTouch, rightIndexTipTouch;
     public Text info, exampleText, outputText;
 
     // phrases
@@ -30,31 +39,19 @@ public class Keyboard : MonoBehaviour
     bool logging = true;
     string logFileName;
 
-    // left pinch detection
-    const float LEFT_PINCH_THRESHOLD = 0.015f;
+    // pinch detection
     int leftPinchState = 0;
+    int rightPinchState = 0;
+
+    // visual effect
+    const int CURSOR_BLINK_TICKS = 60;
+    int cursorBlinkCounter = 0;
+    Material matYellow;
 
     void Start() {
-        // main objects
-        mainCamera   = GameObject.Find("CenterEyeAnchor");
-        keyboardBase = GameObject.Find("Keyboard Base");
-        keyAnchors   = GameObject.FindGameObjectsWithTag("Key Anchor");
-
-        // fingers
-        leftIndexPad  = GameObject.Find("l_index_finger_pad_marker");
-        leftIndexTip  = GameObject.Find("l_index_finger_tip_marker");
-        leftThumb     = GameObject.Find("l_thumb_finger_pad_marker");
-        rightIndexPad = GameObject.Find("r_index_finger_pad_marker");
-        rightIndexTip = GameObject.Find("r_index_finger_tip_marker");
-        rightThumb    = GameObject.Find("r_thumb_finger_pad_marker");
-
-        // touch collider
-        leftIndexTipTouch  = GameObject.Find("l_index_finger_tip_touch").GetComponent<Touch>();
-        rightIndexTipTouch = GameObject.Find("r_index_finger_tip_touch").GetComponent<Touch>();
-        
-        GameObject.Find("Keyboard").transform.SetParent(GameObject.Find("CenterEyeAnchor").transform);
-
         // pre-configuration
+        keyAnchors = GameObject.FindGameObjectsWithTag("Key Anchor");
+        GameObject.Find("Keyboard").transform.SetParent(GameObject.Find("CenterEyeAnchor").transform);
         if (!VisualizeFingertip) {
             GameObject.Find("l_index_finger_tip_sphere").SetActive(false);
             GameObject.Find("r_index_finger_tip_sphere").SetActive(false);
@@ -64,9 +61,9 @@ public class Keyboard : MonoBehaviour
                 g.SetActive(false);
             }
         }
+        RenewTextEntryMethod();
 
         // init phrases
-        decoder = new Decoder();
         try {
             phrases = XFileManager.ReadLines("phrases2.txt");
         } catch (Exception e) {
@@ -83,51 +80,140 @@ public class Keyboard : MonoBehaviour
             // do nothing
         }
 
-        // left pinch detection
-        float leftPinchDist = (leftIndexPad.transform.position - leftThumb.transform.position).magnitude;
+        // pinch detection
+        float leftPinchDist = (leftIndexPad.transform.position - leftThumbPad.transform.position).magnitude;
         switch (leftPinchState) {
-            // no pinch
-            case 0:
-                if (leftPinchDist < LEFT_PINCH_THRESHOLD) {
-                    leftPinchState = 1;
-                    LeftPinch();
-                }
+            case 0:     // no pinch
+                if (leftPinchDist < PinchDistance) { leftPinchState = 1; Pinch(false); }
                 break;
-            // pinching
+            case 1:     // pinching
+                if (leftPinchDist >= PinchDistance) leftPinchState = 0;
+                break;
+        }
+        float rightPinchDist = (rightIndexPad.transform.position - rightThumbPad.transform.position).magnitude;
+        switch (rightPinchState) {
+            case 0:
+                if (rightPinchDist < PinchDistance) { rightPinchState = 1; Pinch(true); }
+                break;
             case 1:
-                if (leftPinchDist >= LEFT_PINCH_THRESHOLD) {
-                    leftPinchState = 0;
-                }
+                if (rightPinchDist >= PinchDistance) rightPinchState = 0;
                 break;
         }
     }
 
     void FixedUpdate() {
+        // tickers
+        cursorBlinkCounter = (cursorBlinkCounter + 1) % CURSOR_BLINK_TICKS;
+        
+        // get finger details
         Vector3 p = rightIndexTip.transform.position;
         float dist = Vector3.Dot(p - keyboardBase.transform.position, -keyboardBase.transform.forward.normalized);
-        if (!rightIndexTipTouch.typing) dist = TypeZoneDist;
         Vector4 combine = new Vector4(p.x, p.y, p.z, dist);
-        decoder.Input(combine);
-        XFileManager.WriteLine(logFileName, "move " + Math.Round(dist, 5));
+
+        // call method
+        if (textEntryMethod == TextEntryMethod.Tap) {
+            decoder.Input(combine, rightIndexTipTouch.GetLastTouchOnKeyboard2D(), rightIndexTipTouch.IfInTypeZone());
+        } else {
+            decoder.Input(combine, rightIndexTipTouch.IfTouchKeyboard(), rightIndexTipTouch.IfInTypeZone());
+        }
+        RenewKeyboardContent();
+        //XFileManager.WriteLine(logFileName, "move " + Math.Round(dist, 5));
     }
 
     public void TouchCommand(string name) {
-        switch (name) {
-            case "Example Next":
-                phraseIdx = (phraseIdx + 1) % phrases.Length;
-                exampleText.text = phrases[phraseIdx];
-                //XFileManager.WriteLine(logFileName, "next");
-                break;
-            case "Output Next":
-                outputText.text = "";
-                break;
+        if (name == "Example Next") {
+            phraseIdx = (phraseIdx + 1) % phrases.Length;
+            exampleText.text = phrases[phraseIdx];
+            //XFileManager.WriteLine(logFileName, "next");
+        }
+        if (name == "Output Clear") {
+            decoder.ClearAll();
+            RenewKeyboardContent();
+        }
+        if (name == "Delete") {
+            decoder.Erase();
+            RenewKeyboardContent();
+        }
+        if (name.Substring(0, 9) == "Candidate") {
+            decoder.Confirm(name[10] - '0');
+        }
+        if (name == "Tap Method" && textEntryMethod != TextEntryMethod.Tap) {
+            textEntryMethod = TextEntryMethod.Tap;
+            RenewTextEntryMethod();
+        }
+        if (name == "Gesture Method" && textEntryMethod != TextEntryMethod.Gesture) {
+            textEntryMethod = TextEntryMethod.Gesture;
+            RenewTextEntryMethod();
         }
     }
 
-    void LeftPinch() {
+    void Pinch(bool right) {
+        if (!right) {
+            // do nothing
+        } else {
+            decoder.Confirm();
+        }
     }
 
     public void ShowInfo(string s) {
         info.text = s;
+    }
+
+    void RenewKeyboardContent() {
+        string outputString = "";
+        List<string> candidates = new List<string>();
+        decoder.Output(ref outputString, ref candidates);
+        if (cursorBlinkCounter >= CURSOR_BLINK_TICKS / 2) outputString += "|";
+        outputText.text = outputString;
+        for (int i = 0; i < 5; i++) {
+            if (i >= candidates.Count) {
+                candidateTexts[i].text = "";
+            } else {
+                candidateTexts[i].text = candidates[i];
+            }
+        }
+    }
+
+    void RenewTextEntryMethod() {
+        if (textEntryMethod == TextEntryMethod.Tap) {
+            decoder = new TapDecoder();
+            GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
+            GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
+        }
+        if (textEntryMethod == TextEntryMethod.Gesture) {
+            decoder = new GestureDecoder();
+            GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
+            GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
+        }
+    }
+
+    public Vector3 PointProjectOnKeyboard(Vector3 p) {
+        // (p + nt - k) ⊥ n
+        Vector3 k = keyboardBase.transform.position;
+        Vector3 n = keyboardBase.transform.forward;
+        float a = Vector3.Dot(p - k, n);
+        float b = Vector3.Dot(n, n);
+        float t = -a / b;
+        Vector3 ans = p + n * t;
+        return ans;
+    }
+
+    public Vector3 SeeThroughPointProjectOnKeyboard(Vector3 p) {
+        // (p + (p - e)t - k) ⊥ n
+        Vector3 e = mainCamera.transform.position;
+        Vector3 k = keyboardBase.transform.position;
+        Vector3 n = keyboardBase.transform.forward;
+        float a = Vector3.Dot(p - k, n);
+        float b = Vector3.Dot(p - e, n);
+        float t = -a / b;
+        Vector3 ans = p + (p - e) * t;
+        return ans;
+    }
+
+    public Vector2 Point3DTo2DOnKeyboard(Vector3 p) {
+        Vector3 q = p - keyboardBase.transform.position;
+        float x = Vector3.Dot(q, keyboardBase.transform.right.normalized);
+        float y = Vector3.Dot(q, keyboardBase.transform.up.normalized);
+        return new Vector2(x, y);
     }
 }

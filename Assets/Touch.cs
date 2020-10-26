@@ -39,7 +39,7 @@ public class Touch : MonoBehaviour
             ifTouchKeyboard = true;
             if (ClickDown()) {
                 Vector3 nowTouch = keyboard.PointProjectOnKeyboard(transform.position);
-                lastTouchOnKeyboard2D = keyboard.Point3DTo2DOnKeyboard(nowTouch);
+                lastTouchOnKeyboard2D = keyboard.Convert3DTo2DOnKeyboard(nowTouch);
             }
         }
     }

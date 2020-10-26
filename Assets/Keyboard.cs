@@ -29,6 +29,8 @@ public class Keyboard : MonoBehaviour
     public GameObject rightIndexPad, rightIndexTip, rightThumbPad;
     public Touch leftIndexTipTouch, rightIndexTipTouch;
     public Text info, exampleText, outputText;
+    public GameObject tapTouch;
+    public LineRenderer gestureTrace;
 
     // phrases
     string[] phrases;
@@ -106,7 +108,7 @@ public class Keyboard : MonoBehaviour
         cursorBlinkCounter = (cursorBlinkCounter + 1) % CURSOR_BLINK_TICKS;
         
         // get finger details
-        Vector3 p = rightIndexTip.transform.position;
+        Vector3 p = rightIndexPad.transform.position;
         float dist = Vector3.Dot(p - keyboardBase.transform.position, -keyboardBase.transform.forward.normalized);
         Vector4 combine = new Vector4(p.x, p.y, p.z, dist);
 
@@ -176,14 +178,18 @@ public class Keyboard : MonoBehaviour
 
     void RenewTextEntryMethod() {
         if (textEntryMethod == TextEntryMethod.Tap) {
-            decoder = new TapDecoder();
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
+            tapTouch.SetActive(true);
+            gestureTrace.gameObject.SetActive(false);
+            decoder = new TapDecoder();
         }
         if (textEntryMethod == TextEntryMethod.Gesture) {
-            decoder = new GestureDecoder();
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
+            tapTouch.SetActive(false);
+            gestureTrace.gameObject.SetActive(true);
+            decoder = new GestureDecoder();
         }
     }
 
@@ -210,10 +216,16 @@ public class Keyboard : MonoBehaviour
         return ans;
     }
 
-    public Vector2 Point3DTo2DOnKeyboard(Vector3 p) {
+    public Vector2 Convert3DTo2DOnKeyboard(Vector3 p) {
         Vector3 q = p - keyboardBase.transform.position;
         float x = Vector3.Dot(q, keyboardBase.transform.right.normalized);
         float y = Vector3.Dot(q, keyboardBase.transform.up.normalized);
         return new Vector2(x, y);
+    }
+
+    public Vector3 Convert2DOnKeyboardTo3D(Vector2 p) {
+        Vector3 q = p.x * keyboardBase.transform.right.normalized + p.y * keyboardBase.transform.up.normalized;
+        q += keyboardBase.transform.position;
+        return q;
     }
 }

@@ -91,24 +91,40 @@ class WhiteBoxDepthExtractor : Extractor {
 }
 
 class NaiveGestureExtractor : Extractor {
-    public enum GestureInputState { None, Stay, Enter, Exit };
+    public enum GestureInputState { None, Enter, Stay, Exit, WaitForConfirm };
+    GestureInputState state;
     bool gestureTyping = false;
 
-    public NaiveGestureExtractor() : base() { }
+    public NaiveGestureExtractor() : base() {
+        state = GestureInputState.None;
+    }
 
     public override int Input(Vector4 p, params object[] args) {
         bool ifTouchKeyboard = (bool)args[0];
         bool ifInTypeZone = (bool)args[1];
+        if (state == GestureInputState.WaitForConfirm || state == GestureInputState.Exit) {
+            // wait for confirm
+            state = GestureInputState.WaitForConfirm;
+            return (int)state;
+        }
         // enter
         if (!gestureTyping && ifTouchKeyboard) {
             gestureTyping = true;
-            return (int)GestureInputState.Enter;
+            state = GestureInputState.Enter;
+            return (int)state;
         }
         // exit
         if (gestureTyping && !ifInTypeZone) {
             gestureTyping = false;
-            return (int)GestureInputState.Exit;
+            state = GestureInputState.Exit;
+            return (int)state;
         }
-        return (int)(gestureTyping ? GestureInputState.Stay : GestureInputState.None);
+        state = gestureTyping ? GestureInputState.Stay : GestureInputState.None;
+        return (int)state;
+    }
+
+    public override void Clear() {
+        base.Clear();
+        state = GestureInputState.None;
     }
 }

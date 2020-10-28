@@ -3,10 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Extractor
-{
+public class Extractor {
     // output
     public Vector4 target;
+    public int state;
 
     public Extractor() { }
 
@@ -37,8 +37,8 @@ class WhiteBoxDepthExtractor : Extractor {
     }
 
     public override int Input(Vector4 nowP, params object[] args) {
-        bool inTypeZone = (bool)args[1];
-        if (!inTypeZone) nowP.w = TYPE_ZONE_HEIGHT;
+        Touch touch = (Touch)args[0];
+        if (!touch.IfInTypeZone()) nowP.w = TYPE_ZONE_HEIGHT;
         float nowDD = nowP.w - p[p.Count - 1].w;
         p.Add(nowP);
         dd.Add(nowDD);
@@ -92,39 +92,37 @@ class WhiteBoxDepthExtractor : Extractor {
 
 class NaiveGestureExtractor : Extractor {
     public enum GestureInputState { None, Enter, Stay, Exit, WaitForConfirm };
-    GestureInputState state;
     bool gestureTyping = false;
 
     public NaiveGestureExtractor() : base() {
-        state = GestureInputState.None;
+        state = (int)GestureInputState.None;
     }
 
     public override int Input(Vector4 p, params object[] args) {
-        bool ifTouchKeyboard = (bool)args[0];
-        bool ifInTypeZone = (bool)args[1];
-        if (state == GestureInputState.WaitForConfirm || state == GestureInputState.Exit) {
+        Touch touch = (Touch)args[0];
+        if (state == (int)GestureInputState.WaitForConfirm || state == (int)GestureInputState.Exit) {
             // wait for confirm
-            state = GestureInputState.WaitForConfirm;
+            state = (int)GestureInputState.WaitForConfirm;
             return (int)state;
         }
         // enter
-        if (!gestureTyping && ifTouchKeyboard) {
+        if (!gestureTyping && touch.IfTouchKeyboard()) {
             gestureTyping = true;
-            state = GestureInputState.Enter;
-            return (int)state;
+            state = (int)GestureInputState.Enter;
+            return state;
         }
         // exit
-        if (gestureTyping && !ifInTypeZone) {
+        if (gestureTyping && !touch.IfInTypeZone()) {
             gestureTyping = false;
-            state = GestureInputState.Exit;
-            return (int)state;
+            state = (int)GestureInputState.Exit;
+            return state;
         }
-        state = gestureTyping ? GestureInputState.Stay : GestureInputState.None;
-        return (int)state;
+        state = gestureTyping ? (int)GestureInputState.Stay : (int)GestureInputState.None;
+        return state;
     }
 
     public override void Clear() {
         base.Clear();
-        state = GestureInputState.None;
+        state = (int)GestureInputState.None;
     }
 }

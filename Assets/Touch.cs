@@ -2,16 +2,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Touch : MonoBehaviour
-{
+public class Touch : MonoBehaviour {
     Keyboard keyboard;
     bool ifInTypeZone = false;
     bool ifTouchKeyboard = false;
     Vector2 lastTouchOnKeyboard2D;
     Vector3 velocity, lastPosition = new Vector3(0, 0, 0);
+    bool isRight;
 
     void Start() {
         keyboard = GameObject.Find("Keyboard").GetComponent<Keyboard>();
+        isRight = gameObject.name[0] == 'r';
     }
     
     void FixedUpdate() {
@@ -54,7 +55,9 @@ public class Touch : MonoBehaviour
         if (collider.name == "Keyboard Base") {
             ifTouchKeyboard = false;
         }
-        keyboard.TouchCommand(collider.name);
+        if (!ClickDown()) {
+            keyboard.TouchCommand(collider.name, this);
+        }
     }
 
     bool ClickDown() {

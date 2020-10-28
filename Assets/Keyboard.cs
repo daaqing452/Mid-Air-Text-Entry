@@ -27,10 +27,10 @@ public class Keyboard : MonoBehaviour
     public GameObject mainCamera, keyboardBase;
     public GameObject leftIndexPad, leftIndexTip, leftThumbPad;
     public GameObject rightIndexPad, rightIndexTip, rightThumbPad;
-    public Touch leftIndexTipTouch, rightIndexTipTouch;
+    public Touch leftTouch, rightTouch;
     public Text info, exampleText, outputText;
-    public GameObject tapTouch;
-    public LineRenderer gestureTrace;
+    public GameObject tapFeedback;
+    public LineRenderer gestureFeedback;
 
     // phrases
     string[] phrases;
@@ -81,48 +81,23 @@ public class Keyboard : MonoBehaviour
         if (OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, OVRInput.Controller.LTouch) > 0.99f) {
             // do nothing
         }
-
-        // pinch detection
-        float leftPinchDist = (leftIndexPad.transform.position - leftThumbPad.transform.position).magnitude;
-        switch (leftPinchState) {
-            case 0:     // no pinch
-                if (leftPinchDist < PinchDistance) { leftPinchState = 1; Pinch(false); }
-                break;
-            case 1:     // pinching
-                if (leftPinchDist >= PinchDistance) leftPinchState = 0;
-                break;
-        }
-        float rightPinchDist = (rightIndexPad.transform.position - rightThumbPad.transform.position).magnitude;
-        switch (rightPinchState) {
-            case 0:
-                if (rightPinchDist < PinchDistance) { rightPinchState = 1; Pinch(true); }
-                break;
-            case 1:
-                if (rightPinchDist >= PinchDistance) rightPinchState = 0;
-                break;
-        }
+        PinchDetection();
     }
 
     void FixedUpdate() {
         // tickers
         cursorBlinkCounter = (cursorBlinkCounter + 1) % CURSOR_BLINK_TICKS;
-        
-        // get finger details
-        Vector3 p = rightIndexPad.transform.position;
-        float dist = Vector3.Dot(p - keyboardBase.transform.position, -keyboardBase.transform.forward.normalized);
-        Vector4 combine = new Vector4(p.x, p.y, p.z, dist);
 
-        // call method
-        if (textEntryMethod == TextEntryMethod.Tap) {
-            decoder.Input(combine, rightIndexTipTouch.GetLastTouchOnKeyboard2D(), rightIndexTipTouch.IfInTypeZone());
-        } else {
-            decoder.Input(combine, rightIndexTipTouch.IfTouchKeyboard(), rightIndexTipTouch.IfInTypeZone());
-        }
+        // update finger position
+        Vector4 combineL = GetFingerCombine(leftIndexPad);
+        Vector4 combineR = GetFingerCombine(rightIndexPad);
+        decoder.Input(combineL, false, leftTouch);
+        decoder.Input(combineR, true, rightTouch);
         RenewKeyboardContent();
         //XFileManager.WriteLine(logFileName, "move " + Math.Round(dist, 5));
     }
 
-    public void TouchCommand(string name) {
+    public void TouchCommand(string name, Touch touch) {
         if (name == "Example Next") {
             phraseIdx = (phraseIdx + 1) % phrases.Length;
             exampleText.text = phrases[phraseIdx];
@@ -147,12 +122,7 @@ public class Keyboard : MonoBehaviour
             textEntryMethod = TextEntryMethod.Gesture;
             RenewTextEntryMethod();
         }
-    }
-
-    void Pinch(bool right) {
-        if (!right) {
-            // do nothing
-        } else {
+        if (name == "Space Key") {
             decoder.Confirm();
         }
     }
@@ -180,16 +150,49 @@ public class Keyboard : MonoBehaviour
         if (textEntryMethod == TextEntryMethod.Tap) {
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
-            tapTouch.SetActive(true);
-            gestureTrace.gameObject.SetActive(false);
+            tapFeedback.SetActive(true);
+            gestureFeedback.gameObject.SetActive(false);
             decoder = new TapDecoder();
         }
         if (textEntryMethod == TextEntryMethod.Gesture) {
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
-            tapTouch.SetActive(false);
-            gestureTrace.gameObject.SetActive(true);
+            tapFeedback.SetActive(false);
+            gestureFeedback.gameObject.SetActive(true);
             decoder = new GestureDecoder();
+        }
+    }
+
+    Vector4 GetFingerCombine(GameObject finger) {
+        Vector3 p = finger.transform.position;
+        float dist = Vector3.Dot(p - keyboardBase.transform.position, -keyboardBase.transform.forward.normalized);
+        return new Vector4(p.x, p.y, p.z, dist);
+    }
+
+    void PinchDetection() {
+        float leftPinchDist = (leftIndexPad.transform.position - leftThumbPad.transform.position).magnitude;
+        switch (leftPinchState) {
+            case 0: // no pinch
+                if (leftPinchDist < PinchDistance) {
+                    leftPinchState = 1;
+                    // do nothing
+                }
+                break;
+            case 1: // pinching
+                if (leftPinchDist >= PinchDistance) leftPinchState = 0;
+                break;
+        }
+        float rightPinchDist = (rightIndexPad.transform.position - rightThumbPad.transform.position).magnitude;
+        switch (rightPinchState) {
+            case 0:
+                if (rightPinchDist < PinchDistance) {
+                    rightPinchState = 1;
+                    // do nothing
+                }
+                break;
+            case 1:
+                if (rightPinchDist >= PinchDistance) rightPinchState = 0;
+                break;
         }
     }
 

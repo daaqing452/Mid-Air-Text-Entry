@@ -4,11 +4,16 @@ using UnityEngine;
 using Word = System.Collections.Generic.KeyValuePair<string, double>;
 
 public class Predictor {
+    // constant after initialization
+    public const int MAX_WORD_LENGTH = 25;
+    public const int ALPHABET = 26;
     public Keyboard keyboard;
     public Vector2[] keys;
+    public Dictionary<string, int> freq = new Dictionary<string, int>();
+
+    // variables
     public List<Word> candidateWords;
     public List<Vector2> inputs;
-    public Dictionary<string, int> freq = new Dictionary<string, int>();
 
     public Predictor(Keyboard keyboard) {
         this.keyboard = keyboard;
@@ -43,6 +48,19 @@ public class Predictor {
         inputs.Clear();
     }
 
+    public void AddCandidateWordByAscending(Word newWord) {
+        candidateWords.Add(newWord);
+        int k = candidateWords.Count - 1;
+        while (k > 0) {
+            if (candidateWords[k].Value <= candidateWords[k - 1].Value) break;
+            var temp = candidateWords[k];
+            candidateWords[k] = candidateWords[k - 1];
+            candidateWords[k - 1] = temp;
+            k--;
+        }
+        if (candidateWords.Count > Decoder.N_CANDIDATE) candidateWords.RemoveAt(candidateWords.Count - 1);
+    }
+
     public Vector2 GetSimpleTouchPosition(Vector4 p) {
         Vector3 finger = new Vector3(p.x, p.y, p.z);
         Vector3 touch3D = keyboard.SeeThroughPointProjectOnKeyboard(finger);
@@ -62,42 +80,39 @@ public class Predictor {
         return touch2D;
     }
 
-    public void AddCandidateWordByAscending(Word newWord) {
-        candidateWords.Add(newWord);
-        int k = candidateWords.Count - 1;
-        while (k > 0) {
-            if (candidateWords[k].Value <= candidateWords[k - 1].Value) break;
-            var temp = candidateWords[k];
-            candidateWords[k] = candidateWords[k - 1];
-            candidateWords[k - 1] = temp;
-            k--;
-        }
-        if (candidateWords.Count > Decoder.N_CANDIDATE) candidateWords.RemoveAt(candidateWords.Count - 1);
-    }
 }
 
 class NaiveTapPredictor : Predictor {
-     
+    public string literalText;
+
     public NaiveTapPredictor(Keyboard keyboard) : base(keyboard) { }
 
     public override string Predict(Vector4 p, params object[] args) {
-        Vector3 p2 = new Vector3(p.x, p.y, p.z);
+        Vector2 touch2D = GetSimpleTouchPosition(p);
+        UpdateLiteralText(touch2D);
+        return literalText;
+    }
+
+    public override void Clear() {
+        base.Clear();
+        literalText = "";
+    }
+    
+    public void UpdateLiteralText(Vector2 touch2D) {
         char best = '_';
         float minDist = 1e20f;
-        foreach (GameObject key in keyboard.keyAnchors) {
-            Vector3 k = key.transform.position;
-            if ((k - p2).magnitude < minDist) {
-                minDist = (k - p2).magnitude;
-                best = (char)(key.name[4] - 'A' + 'a');
+        for (int i = 0; i < ALPHABET; i++) {
+            Vector2 key = keys[i];
+            if ((key - touch2D).magnitude < minDist) {
+                minDist = (key - touch2D).magnitude;
+                best = (char)(i + 'a');
             }
         }
-        return "" + best;
+        literalText += best;
     }
 }
 
-abstract class UniformBayesianTapPredictor : Predictor {
-    public const int MAX_WORD_LENGTH = 25;
-    public const int ALPHABET = 26;
+abstract class UniformBayesianTapPredictor : NaiveTapPredictor {
     public Vector2 SIGMA;
 
     Vector2 C0;
@@ -258,7 +273,6 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
                     now.isEndOfWord = true;
                     now.logFreq = Math.Log(item.Value);
                     now.candidate = candidate;
-                    if (candidate == "hotel") o_hotel = now;
                 }
             }
         }
@@ -268,16 +282,17 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
     
     public override string Predict(Vector4 p, params object[] args) {
         Vector2 touch2D = GetSimpleTouchPosition(p);
+        UpdateLiteralText(touch2D);
         inputs.Add(touch2D);
         candidateWords.Clear();
         DateTime d0 = DateTime.Now;
         RecursiveUpdate(root, inputs.Count);
         keyboard.ShowInfo(Math.Round((DateTime.Now - d0).TotalMilliseconds, 3) + " ");
-        return candidateWords[0].Key;
+        string top1Word = candidateWords[0].Key;
+        candidateWords[0] = new Word(literalText, 0);
+        return top1Word;
     }
-
-    TrieNode o_hotel;
-
+    
     void RecursiveUpdate(TrieNode u, int n) {
         if (u.depth - n > LENGTH_DIFF) return;
         if (n - u.depth <= LENGTH_DIFF) {
@@ -307,7 +322,7 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
 class NaiveGesturePredictor : Predictor {
     const int N_SAMPLE = 50;
     const float EPS = 1e-3f;
-    const double FREQ_WEIGHT = 0.2;
+    const double FREQ_WEIGHT = 0.15;
     const double E_MIN_DIST = 0.5;
     float keyboardScale;
     List<Vector2>[] standards;

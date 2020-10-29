@@ -31,6 +31,7 @@ public class Keyboard : MonoBehaviour
     public Text info, exampleText, outputText;
     public GameObject tapFeedback;
     public LineRenderer gestureFeedback;
+    public AudioSource clickAudio;
 
     // phrases
     string[] phrases;
@@ -63,7 +64,7 @@ public class Keyboard : MonoBehaviour
                 g.SetActive(false);
             }
         }
-        RenewTextEntryMethod();
+        UpdateTextEntryMethod();
 
         // init phrases
         try {
@@ -85,15 +86,24 @@ public class Keyboard : MonoBehaviour
     }
 
     void FixedUpdate() {
-        // tickers
+        // cursor blink tick
         cursorBlinkCounter = (cursorBlinkCounter + 1) % CURSOR_BLINK_TICKS;
+
+        // fade tap feedback
+        Color tapFeedbackColor = tapFeedback.GetComponent<MeshRenderer>().material.color;
+        if (tapFeedbackColor.a == 0) {
+            tapFeedback.transform.position = new Vector3(0, 0, -5);
+        } else {
+            tapFeedbackColor.a = Math.Max(tapFeedbackColor.a - 0.02f, 0);
+            tapFeedback.GetComponent<MeshRenderer>().material.color = tapFeedbackColor;
+        }
 
         // update finger position
         Vector4 combineL = GetFingerCombine(leftIndexPad);
         Vector4 combineR = GetFingerCombine(rightIndexPad);
         decoder.Input(combineL, false, leftTouch);
         decoder.Input(combineR, true, rightTouch);
-        RenewKeyboardContent();
+        UpdateKeyboardContent();
         //XFileManager.WriteLine(logFileName, "move " + Math.Round(dist, 5));
     }
 
@@ -105,24 +115,24 @@ public class Keyboard : MonoBehaviour
         }
         if (name == "Output Clear") {
             decoder.ClearAll();
-            RenewKeyboardContent();
+            UpdateKeyboardContent();
         }
-        if (name == "Delete") {
+        if (name == "Delete Key") {
             decoder.Erase();
-            RenewKeyboardContent();
+            UpdateKeyboardContent();
         }
         if (name.Substring(0, 9) == "Candidate") {
             decoder.Confirm(name[10] - '0');
         }
         if (name == "Tap Method" && textEntryMethod != TextEntryMethod.Tap) {
             textEntryMethod = TextEntryMethod.Tap;
-            RenewTextEntryMethod();
+            UpdateTextEntryMethod();
         }
         if (name == "Gesture Method" && textEntryMethod != TextEntryMethod.Gesture) {
             textEntryMethod = TextEntryMethod.Gesture;
-            RenewTextEntryMethod();
+            UpdateTextEntryMethod();
         }
-        if (name == "Space Key") {
+        if (name == "Enter Key") {
             decoder.Confirm();
         }
     }
@@ -131,7 +141,7 @@ public class Keyboard : MonoBehaviour
         info.text = s;
     }
 
-    void RenewKeyboardContent() {
+    void UpdateKeyboardContent() {
         string outputString = "";
         List<string> candidates = new List<string>();
         decoder.Output(ref outputString, ref candidates);
@@ -146,7 +156,7 @@ public class Keyboard : MonoBehaviour
         }
     }
 
-    void RenewTextEntryMethod() {
+    void UpdateTextEntryMethod() {
         if (textEntryMethod == TextEntryMethod.Tap) {
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
@@ -167,6 +177,27 @@ public class Keyboard : MonoBehaviour
         Vector3 p = finger.transform.position;
         float dist = Vector3.Dot(p - keyboardBase.transform.position, -keyboardBase.transform.forward.normalized);
         return new Vector4(p.x, p.y, p.z, dist);
+    }
+
+    public void DrawTapFeedback(Vector2 p) {
+        tapFeedback.transform.position = Convert2DOnKeyboardTo3D(p) + new Vector3(0, 0, -0.002f);
+        Color tapFeedbackColor =tapFeedback.GetComponent<MeshRenderer>().material.color;
+        tapFeedbackColor.a = 0.8f;
+        tapFeedback.GetComponent<MeshRenderer>().material.color = tapFeedbackColor;
+    }
+
+    public void DrawGestureFeedback(List<Vector2> gesture) {
+        gestureFeedback.positionCount = gesture.Count;
+        for (int i = 0; i < gestureFeedback.positionCount; i++) {
+            Vector2 v = gesture[i];
+            Vector3 v3D = v.x * keyboardBase.transform.right.normalized + v.y * keyboardBase.transform.up.normalized + -0.001f * keyboardBase.transform.forward.normalized;
+            v3D += keyboardBase.transform.position;
+            gestureFeedback.SetPosition(i, v3D);
+        }
+    }
+
+    public void PlayClickAudio() {
+        clickAudio.Play();
     }
 
     void PinchDetection() {

@@ -67,6 +67,10 @@ ScriptsOnlyBuild:
       Script: {instanceID: 0}
     - Class: 81
       Script: {instanceID: 0}
+    - Class: 82
+      Script: {instanceID: 0}
+    - Class: 83
+      Script: {instanceID: 0}
     - Class: 90
       Script: {instanceID: 0}
     - Class: 95
@@ -82,39 +86,39 @@ ScriptsOnlyBuild:
     - Class: 114
       Script: {instanceID: 11402}
     - Class: 114
-      Script: {instanceID: 11428}
+      Script: {instanceID: 11430}
     - Class: 114
-      Script: {instanceID: 11502}
+      Script: {instanceID: 11504}
     - Class: 114
-      Script: {instanceID: 11656}
+      Script: {instanceID: 11658}
     - Class: 114
-      Script: {instanceID: 11878}
+      Script: {instanceID: 11880}
     - Class: 114
-      Script: {instanceID: 12238}
+      Script: {instanceID: 12240}
     - Class: 114
-      Script: {instanceID: 12398}
+      Script: {instanceID: 12400}
     - Class: 114
-      Script: {instanceID: 12504}
+      Script: {instanceID: 12506}
     - Class: 114
-      Script: {instanceID: 12664}
+      Script: {instanceID: 12666}
     - Class: 114
-      Script: {instanceID: 12792}
+      Script: {instanceID: 12794}
     - Class: 114
-      Script: {instanceID: 13038}
+      Script: {instanceID: 13040}
     - Class: 114
-      Script: {instanceID: 13208}
+      Script: {instanceID: 13210}
     - Class: 114
-      Script: {instanceID: 13224}
+      Script: {instanceID: 13226}
     - Class: 114
-      Script: {instanceID: 13310}
+      Script: {instanceID: 13312}
     - Class: 114
-      Script: {instanceID: 13408}
+      Script: {instanceID: 13410}
     - Class: 114
-      Script: {instanceID: 13828}
+      Script: {instanceID: 13830}
     - Class: 114
-      Script: {instanceID: 13904}
+      Script: {instanceID: 13906}
     - Class: 114
-      Script: {instanceID: 14338}
+      Script: {instanceID: 14340}
     - Class: 115
       Script: {instanceID: 0}
     - Class: 120
@@ -1210,7 +1214,7 @@ ScriptsOnlyBuild:
     className: LocalPlayer
   - hash:
       serializedVersion: 2
-      Hash: 87a868769609543c36cc55dfdc97ff68
+      Hash: b39fcac9d7f655d395c1d66e3c14ca25
     assemblyName: Assembly-CSharp.dll
     namespaceName: 
     className: Keyboard

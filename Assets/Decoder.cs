@@ -79,12 +79,8 @@ class TapDecoder : Decoder {
         Extractor extractor = !isRight ? extractorL : extractorR;
         if (extractor.Input(p, args) > 0) {
             nowWord = predictor.Predict(extractor.target, args);
-        }
-        // draw tap touch
-        if (predictor.inputs.Count > 0) {
-            keyboard.tapFeedback.transform.position = keyboard.Convert2DOnKeyboardTo3D(predictor.inputs[predictor.inputs.Count - 1]);
-        } else {
-            keyboard.tapFeedback.transform.position = new Vector3(0, 0, -5000);
+            if (predictor.inputs.Count > 0) keyboard.DrawTapFeedback(predictor.inputs[predictor.inputs.Count - 1]);
+            keyboard.PlayClickAudio();
         }
     }
 }
@@ -105,19 +101,11 @@ class GestureDecoder : Decoder {
         int state = extractor.Input(p, args);
         if (state == (int)NaiveGestureExtractor.GestureInputState.Exit) {
             nowWord = predictor.Predict(p, state);
+            keyboard.PlayClickAudio();
         } else {
+            if (state == (int)NaiveGestureExtractor.GestureInputState.Enter) keyboard.PlayClickAudio();
             predictor.Predict(p, state);
         }
-        DrawGestureTrace(predictor.inputs);
-    }
-
-    public void DrawGestureTrace(List<Vector2> gesture) {
-        keyboard.gestureFeedback.positionCount = gesture.Count;
-        for (int i = 0; i < keyboard.gestureFeedback.positionCount; i++) {
-            Vector2 v = gesture[i];
-            Vector3 v3D = v.x * keyboard.keyboardBase.transform.right.normalized + v.y * keyboard.keyboardBase.transform.up.normalized + -0.001f * keyboard.keyboardBase.transform.forward.normalized;
-            v3D += keyboard.keyboardBase.transform.position;
-            keyboard.gestureFeedback.SetPosition(i, v3D);
-        }
+        keyboard.DrawGestureFeedback(predictor.inputs);
     }
 }

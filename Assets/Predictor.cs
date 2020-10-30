@@ -235,46 +235,13 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
 }
 
 class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
-    class TrieNode {
-        public char c;
-        public TrieNode parent;
-        public TrieNode[] children;
-        public bool isEndOfWord;
-        public double logFreq;
-        public string candidate;
-        public double[] dp;
-        public int depth;
-
-        public TrieNode(char c, TrieNode parent) {
-            this.c = c;
-            this.parent = parent;
-            children = new TrieNode[ALPHABET];
-            isEndOfWord = false;
-            logFreq = 0;
-            candidate = "";
-            dp = new double[MAX_WORD_LENGTH];
-            depth = parent != null ? parent.depth + 1 : 0;
-        }
-    }
-
-    TrieNode root;
+    ElasticTapPredictorTrie root;
 
     public TrieElasticTapPredictor(Keyboard keyboard) : base(keyboard) {
-        // build trie
-        root = new TrieNode(' ', null);
+        // build trie, totally 25508 nodes
+        root = new ElasticTapPredictorTrie(' ', null);
         foreach (var item in freq) {
-            string candidate = item.Key;
-            TrieNode now = root;
-            for (int i = 0; i < candidate.Length; i++) {
-                char c = candidate[i];
-                if (now.children[c - 'a'] == null) now.children[c - 'a'] = new TrieNode(c, now);
-                now = now.children[c - 'a'];
-                if (i == candidate.Length - 1) {
-                    now.isEndOfWord = true;
-                    now.logFreq = Math.Log(item.Value);
-                    now.candidate = candidate;
-                }
-            }
+            root.Build(item.Key, item.Value);
         }
         RecursiveUpdate(root, 0);
         candidateWords.Clear();
@@ -293,11 +260,11 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
         return top1Word;
     }
     
-    void RecursiveUpdate(TrieNode u, int n) {
+    void RecursiveUpdate(ElasticTapPredictorTrie u, int n) {
         if (u.depth - n > LENGTH_DIFF) return;
         if (n - u.depth <= LENGTH_DIFF) {
-            TrieNode p = u.parent;
-            TrieNode g = (p == null) ? null : p.parent;
+            ElasticTapPredictorTrie p = (ElasticTapPredictorTrie)u.parent;
+            ElasticTapPredictorTrie g = (p == null) ? null : (ElasticTapPredictorTrie)p.parent;
             u.dp[n] = (u == root && n == 0) ? 0 : -1e20f;
             // match
             if (p != null && n >= 1) u.dp[n] = Math.Max(u.dp[n], p.dp[n - 1] + LogPUniformTouch(inputs[n - 1], keys[u.c - 'a']));
@@ -313,9 +280,9 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
                 AddCandidateWordByAscending(new Word(u.candidate, logP));
             }
         }
-        for (int i = 0; i < ALPHABET; i++)
-            if (u.children[i] != null)
-                RecursiveUpdate(u.children[i], n);
+        foreach (var item in u.children) {
+            RecursiveUpdate((ElasticTapPredictorTrie)item.Value, n);
+        }
     }
 }
 

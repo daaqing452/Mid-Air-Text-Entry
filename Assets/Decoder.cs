@@ -3,11 +3,11 @@ using UnityEngine;
 using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 public class Decoder {
-    public const int N_CANDIDATE = 5;
+    public static int N_CANDIDATE = 5;
     protected Keyboard keyboard;
     protected Predictor predictor;
     protected List<string> inputWords = new List<string>();
-    protected string nowWord = "";
+    public string nowWord = "";
 
     public Decoder() {
         keyboard = GameObject.Find("Keyboard").GetComponent<Keyboard>();

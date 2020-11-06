@@ -14,14 +14,12 @@ public class Keyboard : MonoBehaviour
     public TextEntryMethod textEntryMethod = TextEntryMethod.Mixed;
     public LexiconType lexicon = LexiconType.English;
     public int DictionarySize = 10000;
-
-    [Header("Thresholds")]
-    public float TypeZoneDistance = 0.03f;
-    public float PinchDistance = 0.015f;
-
+    public int AlwaysOnCandidateNumber = 5;
+    
     [Header("Switches")]
     public bool VisualizeFingertip = false;
     public bool VisualizeKeyCentroids = false;
+    public bool ShowPredictionTime = true;
 
     [Header("GameObjects (Control Panel)")]
     public MeshRenderer uMixedMethod;
@@ -32,7 +30,7 @@ public class Keyboard : MonoBehaviour
 
     [Header("GameObjects (Position)")]
     public GameObject[] uKeyAnchors;
-    public Text[] uCandidateTexts;
+    public GameObject[] uCandidates;
     public GameObject uMainCamera;
     public GameObject uKeyboardBase;
 
@@ -53,7 +51,7 @@ public class Keyboard : MonoBehaviour
 
     [Header("GameObjects (Feedback)")]
     public GameObject uTapFeedback;
-    public LineRenderer uGestureFeedback;
+    public GameObject uGestureFeedback;
     public AudioSource uClickAudio;
 
     // phrases
@@ -69,17 +67,18 @@ public class Keyboard : MonoBehaviour
     bool logging = true;
     string logFileName;
 
-    // pinch detection
+    // detection
+    const float PINCH_DIST = 0.015f;
     int leftPinchState = 0;
     int rightPinchState = 0;
 
     // visual effect
     const int CURSOR_BLINK_TICKS = 60;
     int cursorBlinkCounter = 0;
+    bool ifSelectingCandidate;
 
     void Start() {
         // pre-configuration
-        uKeyAnchors = GameObject.FindGameObjectsWithTag("Key Anchor");
         GameObject.Find("Keyboard").transform.SetParent(GameObject.Find("CenterEyeAnchor").transform);
         if (!VisualizeFingertip) {
             GameObject.Find("l_index_finger_tip_sphere").SetActive(false);
@@ -90,24 +89,21 @@ public class Keyboard : MonoBehaviour
                 g.SetActive(false);
             }
         }
+        Decoder.N_CANDIDATE = uCandidates.Length;
 
         // load phrases and lexicon
-        try {
-            phrases = XFileManager.ReadLines("phrases2.txt");
-            lexiconDictEnglish = new Dictionary<string, int>();
-            string[] anc = XFileManager.ReadLines("ANC.txt");
-            for (int i = 0; i < DictionarySize; i++) {
-                string[] ssp = anc[i].Split(' ');
-                lexiconDictEnglish[ssp[0]] = int.Parse(ssp[1]);
-            }
-            lexiconDictPinyin = new Dictionary<string, int>();
-            string[] chn = XFileManager.ReadLines("dict_chn_pinyin.txt");
-            for (int i = 0; i < DictionarySize; i++) {
-                string[] ssp = chn[i].Split(' ');
-                lexiconDictPinyin[ssp[0]] = int.Parse(ssp[1]);
-            }
-        } catch (Exception e) {
-            Debug.Log(e);
+        phrases = XFileManager.ReadLines("phrases2.txt");
+        lexiconDictEnglish = new Dictionary<string, int>();
+        string[] anc = XFileManager.ReadLines("ANC.txt");
+        for (int i = 0; i < DictionarySize; i++) {
+            string[] ssp = anc[i].Split(' ');
+            lexiconDictEnglish[ssp[0]] = int.Parse(ssp[1]);
+        }
+        lexiconDictPinyin = new Dictionary<string, int>();
+        string[] chn = XFileManager.ReadLines("dict_chn_pinyin.txt");
+        for (int i = 0; i < DictionarySize; i++) {
+            string[] ssp = chn[i].Split(' ');
+            lexiconDictPinyin[ssp[0]] = int.Parse(ssp[1]);
         }
         
         // init log
@@ -139,57 +135,74 @@ public class Keyboard : MonoBehaviour
             uTapFeedback.GetComponent<MeshRenderer>().material.color = tapFeedbackColor;
         }
 
-        try {
-            // update finger position
+        // update finger position
+        if (!DisableInput()) {
             Vector4 combineL = GetFingerCombine(uLeftIndexPad);
             Vector4 combineR = GetFingerCombine(uRightIndexPad);
             decoder.Input(combineL, false, uLeftTouch);
             decoder.Input(combineR, true, uRightTouch);
-            UpdateKeyboardContent();
-        } catch (Exception e) {
-            InfoAppend(e.ToString());
         }
+        UpdateKeyboardContent();
     }
 
     public void TouchCommand(string name, Touch touch) {
-        if (name == "Example Next") {
-            phraseIdx = (phraseIdx + 1) % phrases.Length;
-            uExampleText.text = phrases[phraseIdx];
-            //XFileManager.WriteLine(logFileName, "next");
-        }
-        if (name == "Output Clear") {
-            decoder.ClearAll();
-            UpdateKeyboardContent();
-        }
-        if (name == "Delete Key") {
-            decoder.Erase();
-            UpdateKeyboardContent();
-        }
-        if (name.Substring(0, 9) == "Candidate") {
-            decoder.Confirm(name[10] - '0');
-        }
-        if (name == "Enter Key") {
-            decoder.Confirm();
-        }
-        if (name == "Tap Method" && textEntryMethod != TextEntryMethod.Tap) {
-            textEntryMethod = TextEntryMethod.Tap;
-            UpdateTextEntryMethod();
-        }
-        if (name == "Gesture Method" && textEntryMethod != TextEntryMethod.Gesture) {
-            textEntryMethod = TextEntryMethod.Gesture;
-            UpdateTextEntryMethod();
-        }
-        if (name == "Mixed Method" && textEntryMethod != TextEntryMethod.Mixed) {
-            textEntryMethod = TextEntryMethod.Mixed;
-            UpdateTextEntryMethod();
-        }
-        if (name == "English Lexicon" && lexicon != LexiconType.English) {
-            lexicon = LexiconType.English;
-            UpdateLexicon();
-        }
-        if (name == "Pinyin Lexicon" && lexicon != LexiconType.Pinyin) {
-            lexicon = LexiconType.Pinyin;
-            UpdateLexicon();
+        switch (name) {
+            case "Example Next":
+                phraseIdx = (phraseIdx + 1) % phrases.Length;
+                uExampleText.text = phrases[phraseIdx];
+                break;
+            case "Output Clear":
+                decoder.ClearAll();
+                UpdateKeyboardContent();
+                break;
+            case "Delete Key":
+                decoder.Erase();
+                UpdateKeyboardContent();
+                break;
+            case "Enter Key":
+                Confirm();
+                ifSelectingCandidate = false;
+                break;
+            case "Candidate List Expand":
+                if (decoder.nowWord != "") {
+                    ifSelectingCandidate = !ifSelectingCandidate;
+                }
+                break;
+            case "Tap Method":
+                if (textEntryMethod != TextEntryMethod.Tap) {
+                    textEntryMethod = TextEntryMethod.Tap;
+                    UpdateTextEntryMethod();
+                }
+                break;
+            case "Gesture Method":
+                if (textEntryMethod != TextEntryMethod.Gesture) {
+                    textEntryMethod = TextEntryMethod.Gesture;
+                    UpdateTextEntryMethod();
+                }
+                break;
+            case "Mixed Method":
+                if (textEntryMethod != TextEntryMethod.Mixed) {
+                    textEntryMethod = TextEntryMethod.Mixed;
+                    UpdateTextEntryMethod();
+                }
+                break;
+            case "English Lexicon":
+                if (lexicon != LexiconType.English) {
+                    lexicon = LexiconType.English;
+                    UpdateLexicon();
+                }
+                break;
+            case "Pinyin Lexicon":
+                if (lexicon != LexiconType.Pinyin) {
+                    lexicon = LexiconType.Pinyin;
+                    UpdateLexicon();
+                }
+                break;
+            default:
+                if (name.Substring(0, 9) == "Candidate") {
+                    Confirm(name[10] - '0');
+                }
+                break;
         }
     }
 
@@ -201,54 +214,71 @@ public class Keyboard : MonoBehaviour
         uInfo.text += "\n" + s;
     }
 
+    void Confirm(int index = -1) {
+        decoder.Confirm(index);
+        ifSelectingCandidate = false;
+    }
+
+    bool DisableInput() {
+        return ifSelectingCandidate;
+    }
+
     void UpdateKeyboardContent() {
         string outputString = "";
         List<string> candidates = new List<string>();
         decoder.Output(ref outputString, ref candidates);
         if (cursorBlinkCounter >= CURSOR_BLINK_TICKS / 2) outputString += "|";
         uOutputText.text = outputString;
-        for (int i = 0; i < 5; i++) {
-            if (i >= candidates.Count) {
-                uCandidateTexts[i].text = "";
-            } else {
-                uCandidateTexts[i].text = candidates[i];
+        for (int i = 0; i < AlwaysOnCandidateNumber; i++) {
+            uCandidates[i].GetComponentInChildren<Text>().text = i >= candidates.Count ? "" : candidates[i];
+        }
+        if (ifSelectingCandidate) {
+            for (int i = AlwaysOnCandidateNumber; i < uCandidates.Length; i++) {
+                uCandidates[i].SetActive(true);
+                uCandidates[i].GetComponentInChildren<Text>().text = i >= candidates.Count ? "" : candidates[i];
             }
+            uKeyboardBase.SetActive(false);
+            uGestureFeedback.SetActive(false);
+        } else {
+            for (int i = AlwaysOnCandidateNumber; i < uCandidates.Length; i++) uCandidates[i].SetActive(false);
+            uKeyboardBase.SetActive(true);
+            uGestureFeedback.SetActive(true);
         }
     }
 
     void UpdateTextEntryMethod() {
-        uMixedMethod.material.color = Color.white;
-        uTapMethod.material.color = Color.white;
-        uGestureMethod.material.color = Color.white;
-        if (textEntryMethod == TextEntryMethod.Mixed) {
-            uMixedMethod.material.color = Color.yellow;
-            decoder = new MixedDecoder();
+        try {
+            uMixedMethod.material.color = Color.white;
+            uTapMethod.material.color = Color.white;
+            uGestureMethod.material.color = Color.white;
+            if (textEntryMethod == TextEntryMethod.Mixed) {
+                uMixedMethod.material.color = Color.yellow;
+                decoder = new MixedDecoder();
+            }
+            if (textEntryMethod == TextEntryMethod.Tap) {
+                uTapMethod.material.color = Color.yellow;
+                decoder = new TapDecoder();
+            }
+            if (textEntryMethod == TextEntryMethod.Gesture) {
+                uGestureMethod.material.color = Color.yellow;
+                decoder = new GestureDecoder();
+            }
+            UpdateLexicon();
+        } catch (Exception e) {
+            InfoAppend(e.ToString());
         }
-        if (textEntryMethod == TextEntryMethod.Tap) {
-            uTapMethod.material.color = Color.yellow;
-            decoder = new TapDecoder();
-        }
-        if (textEntryMethod == TextEntryMethod.Gesture) {
-            uGestureMethod.material.color = Color.yellow;
-            decoder = new GestureDecoder();
-        }
-        UpdateLexicon();
     }
 
     void UpdateLexicon() {
-        try {
-            uEnglishLexicon.material.color = Color.white;
-            uPinyinLexicon.material.color = Color.white;
-            if (lexicon == LexiconType.English) {
-                uEnglishLexicon.material.color = Color.yellow;
-                decoder.ReloadLexicon(lexiconDictEnglish);
-            }
-            if (lexicon == LexiconType.Pinyin) {
-                uPinyinLexicon.material.color = Color.yellow;
-                decoder.ReloadLexicon(lexiconDictPinyin);
-            }
-        } catch (Exception e) {
-            InfoAppend(e.ToString());
+        uEnglishLexicon.material.color = Color.white;
+        uPinyinLexicon.material.color = Color.white;
+        if (lexicon == LexiconType.English) {
+            uEnglishLexicon.material.color = Color.yellow;
+            decoder.ReloadLexicon(lexiconDictEnglish);
+        }
+        if (lexicon == LexiconType.Pinyin) {
+            uPinyinLexicon.material.color = Color.yellow;
+            decoder.ReloadLexicon(lexiconDictPinyin);
         }
     }
 
@@ -260,12 +290,13 @@ public class Keyboard : MonoBehaviour
     }
 
     public void DrawGestureFeedback(List<Vector2> gesture) {
-        uGestureFeedback.positionCount = gesture.Count;
-        for (int i = 0; i < uGestureFeedback.positionCount; i++) {
+        LineRenderer renderer = uGestureFeedback.GetComponent<LineRenderer>();
+        renderer.positionCount = gesture.Count;
+        for (int i = 0; i < renderer.positionCount; i++) {
             Vector2 v = gesture[i];
             Vector3 v3D = v.x * uKeyboardBase.transform.right.normalized + v.y * uKeyboardBase.transform.up.normalized + -0.001f * uKeyboardBase.transform.forward.normalized;
             v3D += uKeyboardBase.transform.position;
-            uGestureFeedback.SetPosition(i, v3D);
+            renderer.SetPosition(i, v3D);
         }
     }
 
@@ -277,25 +308,25 @@ public class Keyboard : MonoBehaviour
         float leftPinchDist = (uLeftIndexPad.transform.position - uLeftThumbPad.transform.position).magnitude;
         switch (leftPinchState) {
             case 0: // no pinch
-                if (leftPinchDist < PinchDistance) {
+                if (leftPinchDist < PINCH_DIST) {
                     leftPinchState = 1;
                     // do nothing
                 }
                 break;
             case 1: // pinching
-                if (leftPinchDist >= PinchDistance) leftPinchState = 0;
+                if (leftPinchDist >= PINCH_DIST) leftPinchState = 0;
                 break;
         }
         float rightPinchDist = (uRightIndexPad.transform.position - uRightThumbPad.transform.position).magnitude;
         switch (rightPinchState) {
             case 0:
-                if (rightPinchDist < PinchDistance) {
+                if (rightPinchDist < PINCH_DIST) {
                     rightPinchState = 1;
                     // do nothing
                 }
                 break;
             case 1:
-                if (rightPinchDist >= PinchDistance) rightPinchState = 0;
+                if (rightPinchDist >= PINCH_DIST) rightPinchState = 0;
                 break;
         }
     }

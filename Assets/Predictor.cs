@@ -217,15 +217,15 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
     public TrieElasticTapPredictor(Keyboard keyboard) : base(keyboard) { }
     
     public override string Predict(Vector4 p, params object[] args) {
+        DateTime __d0 = DateTime.Now;
         Vector2 p2D = keyboard.GetTouchPosition(p);
         UpdateLiteralText(p2D);
         inputs.Add(p2D);
         candidateWords.Clear();
-        DateTime __d0 = DateTime.Now;
         RecursiveUpdate(root, inputs.Count);
-        //keyboard.InfoShow("time(tap): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         string top1Word = candidateWords[0].Key;
         candidateWords[0] = new Word(literalText, 0);
+        if (keyboard.ShowPredictionTime) keyboard.InfoShow("time(tap): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         return top1Word;
     }
     
@@ -309,10 +309,10 @@ class NaiveGesturePredictor : Predictor {
     }
     
     public virtual string EnumerateCandidates() {
+        DateTime __d0 = DateTime.Now;
         Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
         candidateWords.Clear();
         int j = -1;
-        DateTime __d0 = DateTime.Now;
         foreach (var item in lexicon) {
             j++;
             string candidate = item.Key;
@@ -323,7 +323,7 @@ class NaiveGesturePredictor : Predictor {
             score -= dist;
             AddCandidateWordByAscending(new Word(candidate, score));
         }
-        //keyboard.InfoShow("time(gesture): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
+        if (keyboard.ShowPredictionTime) keyboard.InfoShow("time(gesture): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         return candidateWords[0].Key;
     }
 
@@ -399,7 +399,6 @@ class NaiveGesturePredictor : Predictor {
         standards = new List<Vector2[]>();
         foreach (var item in lexicon) {
             string candidate = item.Key;
-            for (int i = 0; i < candidate.Length; i++) if (candidate[i] < 'a' || candidate[i] > 'z') keyboard.InfoAppend(candidate.Length + " " + (int)candidate[0] + " " + (int)candidate[1]);
             List<Vector2> wordPoints = new List<Vector2>();
             for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
             standards.Add(Resample(wordPoints, N_SAMPLE));
@@ -458,7 +457,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
             AddCandidateWordByAscending(new Word(candidate, score));
         }
         DateTime __d3 = DateTime.Now;
-        //keyboard.InfoShow("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
+        if (keyboard.ShowPredictionTime) keyboard.InfoShow("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
         return candidateWords[0].Key;
     }
     

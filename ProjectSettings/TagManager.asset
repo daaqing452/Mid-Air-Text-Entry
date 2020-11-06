@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Key Anchor
   - Key Sphere
+  - Candidate Text
   layers:
   - Default
   - TransparentFX

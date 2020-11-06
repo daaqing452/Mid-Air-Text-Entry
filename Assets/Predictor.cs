@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Word = System.Collections.Generic.KeyValuePair<string, double>;
+using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 public class Predictor {
     // constant after initialization
@@ -9,7 +10,7 @@ public class Predictor {
     protected const int ALPHABET = 26;
     protected Keyboard keyboard;
     protected Vector2[] keys;
-    protected Dictionary<string, int> freq = new Dictionary<string, int>();
+    public Lexicon lexicon;
 
     // readable variables
     public List<Word> candidateWords;
@@ -18,23 +19,12 @@ public class Predictor {
     public Predictor(Keyboard keyboard) {
         this.keyboard = keyboard;
         keys = new Vector2[26];
-        foreach (GameObject key in keyboard.keyAnchors) {
+        foreach (GameObject key in keyboard.uKeyAnchors) {
             char c = key.name[4];
             keys[c - 'A'] = keyboard.Convert3DTo2DOnKeyboard(key.transform.position);
         }
         candidateWords = new List<Word>();
         inputs = new List<Vector2>();
-
-        // load lexicon files
-        try {
-            string[] anc = XFileManager.ReadLines("ANC.txt");
-            for (int i = 0; i < keyboard.DictionarySize; i++) {
-                string[] ssp = anc[i].Split(' ');
-                freq[ssp[0]] = int.Parse(ssp[1]);
-            }
-        } catch (Exception e) {
-            Debug.Log(e);
-        }
     }
 
     ~Predictor() {
@@ -46,6 +36,10 @@ public class Predictor {
     public virtual void Clear() {
         candidateWords.Clear();
         inputs.Clear();
+    }
+
+    public virtual void ReloadLexicon(Lexicon lexicon) {
+        this.lexicon = lexicon;
     }
 
     protected void AddCandidateWordByAscending(Word newWord) {
@@ -103,7 +97,7 @@ abstract class UniformBayesianTapPredictor : NaiveTapPredictor {
         SIGMA = new Vector2(0.5f / 10, 0.5f / 3);
         C0 = new Vector2((float)-Math.Log(Math.Sqrt(2.0 * Math.PI) * SIGMA.x), (float)-Math.Log(Math.Sqrt(2.0 * Math.PI) * SIGMA.y));
         C1 = new Vector2(1.0f / 2 / SIGMA.x / SIGMA.x, 1.0f / 2 / SIGMA.y / SIGMA.y);
-        KEYBOARD_SIZE = new Vector2(keyboard.keyboardBase.transform.lossyScale.x, keyboard.keyboardBase.transform.lossyScale.y);
+        KEYBOARD_SIZE = new Vector2(keyboard.uKeyboardBase.transform.lossyScale.x, keyboard.uKeyboardBase.transform.lossyScale.y);
     }
 
     public double LogPUniformTouch(Vector2 touch2D, Vector2 c) {
@@ -124,14 +118,7 @@ abstract class UniformBayesianTapPredictor : NaiveTapPredictor {
 class RigidTapPredictor : UniformBayesianTapPredictor {
     List<string>[] words;
 
-    public RigidTapPredictor(Keyboard keyboard) : base(keyboard) {
-        words = new List<string>[MAX_WORD_LENGTH];
-        for (int i = 0; i < MAX_WORD_LENGTH; i++) words[i] = new List<string>();
-        foreach (var item in freq) {
-            string word = item.Key;
-            words[word.Length].Add(word);
-        }
-    }
+    public RigidTapPredictor(Keyboard keyboard) : base(keyboard) { }
     
     public override string Predict(Vector4 p, params object[] args) {
         Vector2 p2D = keyboard.GetTouchPosition(p);
@@ -140,13 +127,23 @@ class RigidTapPredictor : UniformBayesianTapPredictor {
         int n = inputs.Count;
         for (int i = 0; i < words[n].Count; i++) {
             string candidate = words[n][i];
-            double logP = Math.Log(freq[candidate]);
+            double logP = Math.Log(lexicon[candidate]);
             for (int j = 0; j < n; j++) {
                 logP += LogPUniformTouch(inputs[j], keys[candidate[j] - 'a']);
             }
             AddCandidateWordByAscending(new Word(candidate, logP));
         }
         return candidateWords[0].Key;
+    }
+
+    public override void ReloadLexicon(Lexicon lexicon) {
+        base.ReloadLexicon(lexicon);
+        words = new List<string>[MAX_WORD_LENGTH];
+        for (int i = 0; i < MAX_WORD_LENGTH; i++) words[i] = new List<string>();
+        foreach (var item in lexicon) {
+            string word = item.Key;
+            words[word.Length].Add(word);
+        }
     }
 }
 
@@ -168,7 +165,7 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
         Vector2 p2D = keyboard.GetTouchPosition(p);
         inputs.Add(p2D);
         candidateWords.Clear();
-        foreach (var item in freq) {
+        foreach (var item in lexicon) {
             string candidate = item.Key;
             // ignore too much difference in length
             if (Math.Abs(candidate.Length - inputs.Count) > LENGTH_DIFF) continue;
@@ -217,15 +214,7 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
 class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
     ElasticTapPredictorTrie root;
     
-    public TrieElasticTapPredictor(Keyboard keyboard) : base(keyboard) {
-        // build trie, totally 50129 nodes
-        root = new ElasticTapPredictorTrie(' ', null);
-        foreach (var item in freq) {
-            root.Build(item.Key, item.Value);
-        }
-        RecursiveUpdate(root, 0);
-        candidateWords.Clear();
-    }
+    public TrieElasticTapPredictor(Keyboard keyboard) : base(keyboard) { }
     
     public override string Predict(Vector4 p, params object[] args) {
         Vector2 p2D = keyboard.GetTouchPosition(p);
@@ -234,7 +223,7 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
         candidateWords.Clear();
         DateTime __d0 = DateTime.Now;
         RecursiveUpdate(root, inputs.Count);
-        keyboard.ShowInfo("time(tap): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
+        //keyboard.InfoShow("time(tap): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         string top1Word = candidateWords[0].Key;
         candidateWords[0] = new Word(literalText, 0);
         return top1Word;
@@ -264,6 +253,28 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
             RecursiveUpdate((ElasticTapPredictorTrie)item.Value, n);
         }
     }
+
+    public override int GetHashCode() {
+        return base.GetHashCode();
+        // build trie, totally 50129 nodes
+        root = new ElasticTapPredictorTrie(' ', null);
+        foreach (var item in lexicon) {
+            root.Build(item.Key, item.Value);
+        }
+        RecursiveUpdate(root, 0);
+        candidateWords.Clear();
+    }
+
+    public override void ReloadLexicon(Lexicon lexicon) {
+        base.ReloadLexicon(lexicon);
+        // build trie, totally 50129 nodes
+        root = new ElasticTapPredictorTrie(' ', null);
+        foreach (var item in lexicon) {
+            root.Build(item.Key, item.Value);
+        }
+        RecursiveUpdate(root, 0);
+        candidateWords.Clear();
+    }
 }
 
 class NaiveGesturePredictor : Predictor {
@@ -278,14 +289,7 @@ class NaiveGesturePredictor : Predictor {
     protected List<Vector2[]> standards;
 
     public NaiveGesturePredictor(Keyboard keyboard) : base(keyboard) {
-        keyboardScale = keyboard.keyboardBase.transform.lossyScale.magnitude;
-        standards = new List<Vector2[]>();
-        foreach (var item in freq) {
-            string candidate = item.Key;
-            List<Vector2> wordPoints = new List<Vector2>();
-            for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
-            standards.Add(Resample(wordPoints, N_SAMPLE));
-        }
+        keyboardScale = keyboard.uKeyboardBase.transform.lossyScale.magnitude;
     }
 
     public override string Predict(Vector4 p, params object[] args) {
@@ -303,13 +307,13 @@ class NaiveGesturePredictor : Predictor {
         }
         return "";
     }
-
+    
     public virtual string EnumerateCandidates() {
         Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
         candidateWords.Clear();
         int j = -1;
         DateTime __d0 = DateTime.Now;
-        foreach (var item in freq) {
+        foreach (var item in lexicon) {
             j++;
             string candidate = item.Key;
             double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
@@ -319,7 +323,7 @@ class NaiveGesturePredictor : Predictor {
             score -= dist;
             AddCandidateWordByAscending(new Word(candidate, score));
         }
-        keyboard.ShowInfo("time(gesture): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
+        //keyboard.InfoShow("time(gesture): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         return candidateWords[0].Key;
     }
 
@@ -389,6 +393,18 @@ class NaiveGesturePredictor : Predictor {
         }
         return dist / keyboardScale;
     }
+
+    public override void ReloadLexicon(Lexicon lexicon) {
+        base.ReloadLexicon(lexicon);
+        standards = new List<Vector2[]>();
+        foreach (var item in lexicon) {
+            string candidate = item.Key;
+            for (int i = 0; i < candidate.Length; i++) if (candidate[i] < 'a' || candidate[i] > 'z') keyboard.InfoAppend(candidate.Length + " " + (int)candidate[0] + " " + (int)candidate[1]);
+            List<Vector2> wordPoints = new List<Vector2>();
+            for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
+            standards.Add(Resample(wordPoints, N_SAMPLE));
+        }
+    }
 }
 
 class TwoLevelGesturePredictor : NaiveGesturePredictor {
@@ -414,15 +430,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
     const int N_CANDIDATE_L1 = 100;
     List<Vector2[]> standardsL1;
 
-    public TwoLevelGesturePredictor(Keyboard keyboard) : base(keyboard) {
-        standardsL1 = new List<Vector2[]>();
-        foreach (var item in freq) {
-            string candidate = item.Key;
-            List<Vector2> wordPoints = new List<Vector2>();
-            for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
-            standardsL1.Add(Resample(wordPoints, N_SAMPLE_L1));
-        }
-    }
+    public TwoLevelGesturePredictor(Keyboard keyboard) : base(keyboard) { }
 
     public override string EnumerateCandidates() {
         DateTime __d0 = DateTime.Now;
@@ -430,7 +438,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
         Vector2[] resampledInputsL1 = Resample(inputs, N_SAMPLE_L1);
         int j = -1;
         List<FirstLevelItem> items = new List<FirstLevelItem>();
-        foreach (var item in freq) {
+        foreach (var item in lexicon) {
             j++;
             float dist = RigidMatching(resampledInputsL1, standardsL1[j]);
             items.Add(new FirstLevelItem(item.Key, item.Value, j, dist));
@@ -450,7 +458,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
             AddCandidateWordByAscending(new Word(candidate, score));
         }
         DateTime __d3 = DateTime.Now;
-        keyboard.ShowInfo("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
+        //keyboard.InfoShow("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
         return candidateWords[0].Key;
     }
     
@@ -466,5 +474,16 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
         for (int i = l; i < r; i++) items[i] = tmp[i - l];
         GetTopCandidatesByMergeSort(items, l, ml, d + 1);
         GetTopCandidatesByMergeSort(items, mr, r, d + 1);
+    }
+
+    public override void ReloadLexicon(Lexicon lexicon) {
+        base.ReloadLexicon(lexicon);
+        standardsL1 = new List<Vector2[]>();
+        foreach (var item in lexicon) {
+            string candidate = item.Key;
+            List<Vector2> wordPoints = new List<Vector2>();
+            for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
+            standardsL1.Add(Resample(wordPoints, N_SAMPLE_L1));
+        }
     }
 }

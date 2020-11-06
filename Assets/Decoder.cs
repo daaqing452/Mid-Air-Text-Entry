@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
+using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 public class Decoder {
     public const int N_CANDIDATE = 5;
@@ -63,6 +62,11 @@ public class Decoder {
             }
         }
     }
+
+    public virtual void ReloadLexicon(Lexicon lexicon) {
+        predictor.ReloadLexicon(lexicon);
+        ClearAll();
+    }
 }
 
 class TapDecoder : Decoder {
@@ -106,7 +110,7 @@ class GestureDecoder : Decoder {
         int state = extractor.Input(p, args);
         nowIsRight = isRight;
         nowWord = predictor.Predict(p, state);
-        if (state == (int)NaiveGestureExtractor.GestureInputState.Enter || state == (int)NaiveGestureExtractor.GestureInputState.Exit) keyboard.PlayClickAudio();
+        if (state == (int)NaiveGestureExtractor.GestureInputState.Enter) keyboard.PlayClickAudio();
         keyboard.DrawGestureFeedback(predictor.inputs);
     }
 
@@ -197,7 +201,7 @@ class MixedDecoder : Decoder {
             int gestureState = gestureExtractor.Input(p, args);
             gestureInputIsRight = isRight;
             nowWord = gesturePredictor.Predict(p, gestureState);
-            if (gestureState == (int)NaiveGestureExtractor.GestureInputState.Exit) keyboard.PlayClickAudio();
+            //if (gestureState == (int)NaiveGestureExtractor.GestureInputState.Exit) keyboard.PlayClickAudio();
             keyboard.DrawGestureFeedback(gesturePredictor.inputs);
         }
     }
@@ -214,5 +218,11 @@ class MixedDecoder : Decoder {
         inTypeZoneL = inTypeZoneR = false;
         ifTouchKeyboard = false;
         ifTouchKeyboardPlayClickAudio = false;
+    }
+
+    public override void ReloadLexicon(Lexicon lexicon) {
+        base.ReloadLexicon(lexicon);
+        tapPredictor.ReloadLexicon(lexicon);
+        gesturePredictor.ReloadLexicon(lexicon);
     }
 }

@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class Touch : MonoBehaviour {
     Keyboard keyboard;
@@ -61,6 +59,6 @@ public class Touch : MonoBehaviour {
     }
 
     bool ClickDown() {
-        return Vector3.Dot(velocity, keyboard.keyboardBase.transform.forward) > 0;
+        return Vector3.Dot(velocity, keyboard.uKeyboardBase.transform.forward) > 0;
     }
 }

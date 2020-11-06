@@ -92,33 +92,33 @@ ScriptsOnlyBuild:
     - Class: 114
       Script: {instanceID: 11656}
     - Class: 114
-      Script: {instanceID: 11878}
+      Script: {instanceID: 11880}
     - Class: 114
-      Script: {instanceID: 12238}
+      Script: {instanceID: 12242}
     - Class: 114
-      Script: {instanceID: 12398}
+      Script: {instanceID: 12402}
     - Class: 114
-      Script: {instanceID: 12504}
+      Script: {instanceID: 12508}
     - Class: 114
-      Script: {instanceID: 12666}
+      Script: {instanceID: 12668}
     - Class: 114
-      Script: {instanceID: 12794}
+      Script: {instanceID: 12796}
     - Class: 114
-      Script: {instanceID: 13040}
+      Script: {instanceID: 13042}
     - Class: 114
-      Script: {instanceID: 13210}
+      Script: {instanceID: 13212}
     - Class: 114
-      Script: {instanceID: 13226}
+      Script: {instanceID: 13228}
     - Class: 114
-      Script: {instanceID: 13312}
+      Script: {instanceID: 13316}
     - Class: 114
-      Script: {instanceID: 13410}
+      Script: {instanceID: 13414}
     - Class: 114
-      Script: {instanceID: 13830}
+      Script: {instanceID: 13834}
     - Class: 114
-      Script: {instanceID: 13906}
+      Script: {instanceID: 13910}
     - Class: 114
-      Script: {instanceID: 14340}
+      Script: {instanceID: 14342}
     - Class: 115
       Script: {instanceID: 0}
     - Class: 120
@@ -1548,12 +1548,6 @@ ScriptsOnlyBuild:
     assemblyName: UnityEngine.XR.LegacyInputHelpers.dll
     namespaceName: UnityEngine.XR.LegacyInputHelpers
     className: SwingArmModel
-  - hash:
-      serializedVersion: 2
-      Hash: 71bb6a6b6c8f052f948db64c7dd3ca4f
-    assemblyName: Assembly-CSharp.dll
-    namespaceName: 
-    className: XFileManager
   - hash:
       serializedVersion: 2
       Hash: c3d3430df9e3ea95e3e3d587961390fb

@@ -7,10 +7,10 @@ using UnityEngine.UI;
 
 public class Keyboard : MonoBehaviour
 {
-    public enum TextEntryMethod { Tap, Gesture };
+    public enum TextEntryMethod { Mixed, Tap, Gesture };
     
     [Header("Configuration")]
-    public TextEntryMethod textEntryMethod = TextEntryMethod.Tap;
+    public TextEntryMethod textEntryMethod = TextEntryMethod.Mixed;
     public int DictionarySize = 10000;
 
     [Header("Threshold")]
@@ -132,6 +132,10 @@ public class Keyboard : MonoBehaviour
             textEntryMethod = TextEntryMethod.Gesture;
             UpdateTextEntryMethod();
         }
+        if (name == "Mixed Method" && textEntryMethod != TextEntryMethod.Mixed) {
+            textEntryMethod = TextEntryMethod.Mixed;
+            UpdateTextEntryMethod();
+        }
         if (name == "Enter Key") {
             decoder.Confirm();
         }
@@ -157,19 +161,20 @@ public class Keyboard : MonoBehaviour
     }
 
     void UpdateTextEntryMethod() {
+        GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
+        GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
+        GameObject.Find("Mixed Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
         if (textEntryMethod == TextEntryMethod.Tap) {
             GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
-            GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
-            tapFeedback.SetActive(true);
-            gestureFeedback.gameObject.SetActive(false);
             decoder = new TapDecoder();
         }
         if (textEntryMethod == TextEntryMethod.Gesture) {
-            GameObject.Find("Tap Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 255);
             GameObject.Find("Gesture Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
-            tapFeedback.SetActive(false);
-            gestureFeedback.gameObject.SetActive(true);
             decoder = new GestureDecoder();
+        }
+        if (textEntryMethod == TextEntryMethod.Mixed) {
+            GameObject.Find("Mixed Method").GetComponent<MeshRenderer>().material.color = new Color(255, 255, 0);
+            decoder = new MixedDecoder();
         }
     }
 
@@ -227,6 +232,7 @@ public class Keyboard : MonoBehaviour
         }
     }
 
+    // get finger position
     public Vector3 PointProjectOnKeyboard(Vector3 p) {
         // (p + nt - k) ⊥ n
         Vector3 k = keyboardBase.transform.position;
@@ -261,5 +267,28 @@ public class Keyboard : MonoBehaviour
         Vector3 q = p.x * keyboardBase.transform.right.normalized + p.y * keyboardBase.transform.up.normalized;
         q += keyboardBase.transform.position;
         return q;
+    }
+
+    public Vector2 GetTouchPosition(Vector4 p) {
+        return GetDirectTouchPosition(p);
+    }
+
+    public Vector2 GetDirectTouchPosition(Vector4 p) {
+        Vector3 finger = new Vector3(p.x, p.y, p.z);
+        Vector3 p3D = SeeThroughPointProjectOnKeyboard(finger);
+        Vector2 p2D = Convert3DTo2DOnKeyboard(p3D);
+        return p2D;
+    }
+
+    public Vector2 GetHybridTouchPosition(Vector4 p, Vector2 lastTouchOnKeyboard2D) {
+        Vector2 p2D = new Vector3(0, 0);
+        if (p.w > 0) {
+            Vector3 finger = new Vector3(p.x, p.y, p.z);
+            Vector3 p3D = SeeThroughPointProjectOnKeyboard(finger);
+            p2D = Convert3DTo2DOnKeyboard(p3D);
+        } else {
+            p2D = lastTouchOnKeyboard2D;
+        }
+        return p2D;
     }
 }

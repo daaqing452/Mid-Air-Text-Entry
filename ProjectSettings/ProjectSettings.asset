@@ -131,7 +131,7 @@ PlayerSettings:
     16:10: 1
     16:9: 1
     Others: 1
-  bundleVersion: 0.1
+  bundleVersion: 0.2
   preloadedAssets:
   - {fileID: 2460799655941578083, guid: 05ecadf8e1f0b394e8e48e805aa2e996, type: 2}
   - {fileID: 11400000, guid: 8c526f2ddc627f44aa668eb7319a14c2, type: 2}
@@ -179,6 +179,7 @@ PlayerSettings:
   applicationIdentifier:
     Android: com.pcg.MidAirTextEntry
     Standalone: com.DefaultCompany.Mid-AirTextEntry
+    Windows Store Apps: com.DefaultCompany.Mid-AirTextEntry
     iPhone: com.DefaultCompany.Mid-AirTextEntry
   buildNumber: {}
   AndroidBundleVersionCode: 1

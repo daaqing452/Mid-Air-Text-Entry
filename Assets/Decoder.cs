@@ -5,11 +5,10 @@ using UnityEngine;
 
 public class Decoder {
     public const int N_CANDIDATE = 5;
-    public Keyboard keyboard;
-    public Extractor extractorL, extractorR;
-    public Predictor predictor;
-    public List<string> inputWords = new List<string>();
-    public string nowWord = "";
+    protected Keyboard keyboard;
+    protected Predictor predictor;
+    protected List<string> inputWords = new List<string>();
+    protected string nowWord = "";
 
     public Decoder() {
         keyboard = GameObject.Find("Keyboard").GetComponent<Keyboard>();
@@ -31,10 +30,8 @@ public class Decoder {
         }
     }
 
-    public void ClearWord() {
+    public virtual void ClearWord() {
         nowWord = "";
-        extractorL.Clear();
-        extractorR.Clear();
         predictor.Clear();
     }
 
@@ -68,44 +65,154 @@ public class Decoder {
     }
 }
 
-class TapDecoder : Decoder { 
+class TapDecoder : Decoder {
+    WhiteBoxDepthTapExtractor extractorL, extractorR;
+
     public TapDecoder() : base() {
-        extractorL = new WhiteBoxDepthExtractor();
-        extractorR = new WhiteBoxDepthExtractor();
+        extractorL = new WhiteBoxDepthTapExtractor();
+        extractorR = new WhiteBoxDepthTapExtractor();
         predictor = new TrieElasticTapPredictor(keyboard);
     }
 
     public override void Input(Vector4 p, bool isRight, params object[] args) {
-        Extractor extractor = !isRight ? extractorL : extractorR;
-        if (extractor.Input(p, args) > 0) {
+        WhiteBoxDepthTapExtractor extractor = !isRight ? extractorL : extractorR;
+        int state = extractor.Input(p, args);
+        if (state == (int)WhiteBoxDepthTapExtractor.TapInputState.LiftUp) {
             nowWord = predictor.Predict(extractor.target, args);
-            if (predictor.inputs.Count > 0) keyboard.DrawTapFeedback(predictor.inputs[predictor.inputs.Count - 1]);
+            keyboard.DrawTapFeedback(predictor.inputs[predictor.inputs.Count - 1]);
             keyboard.PlayClickAudio();
         }
+    }
+
+    public override void ClearWord() {
+        base.ClearWord();
+        extractorL.Clear();
+        extractorR.Clear();
     }
 }
 
 class GestureDecoder : Decoder {
+    NaiveGestureExtractor extractor;
+    bool nowIsRight;
+
     public GestureDecoder() : base() {
-        extractorL = new NaiveGestureExtractor();
-        extractorR = new NaiveGestureExtractor();
-        predictor = new NaiveGesturePredictor(keyboard);
+        extractor = new NaiveGestureExtractor();
+        predictor = new TwoLevelGesturePredictor(keyboard);
     }
 
     public override void Input(Vector4 p, bool isRight, params object[] args) {
         // one finger cannot bother the other finger
-        if (!isRight && extractorR.state != (int)NaiveGestureExtractor.GestureInputState.None) return;
-        if ( isRight && extractorL.state != (int)NaiveGestureExtractor.GestureInputState.None) return;
-        // main
-        Extractor extractor = !isRight ? extractorL : extractorR;
+        if (isRight != nowIsRight && extractor.state != (int)NaiveGestureExtractor.GestureInputState.None) return;
         int state = extractor.Input(p, args);
-        if (state == (int)NaiveGestureExtractor.GestureInputState.Exit) {
-            nowWord = predictor.Predict(p, state);
-            keyboard.PlayClickAudio();
-        } else {
-            if (state == (int)NaiveGestureExtractor.GestureInputState.Enter) keyboard.PlayClickAudio();
-            predictor.Predict(p, state);
-        }
+        nowIsRight = isRight;
+        nowWord = predictor.Predict(p, state);
+        if (state == (int)NaiveGestureExtractor.GestureInputState.Enter || state == (int)NaiveGestureExtractor.GestureInputState.Exit) keyboard.PlayClickAudio();
         keyboard.DrawGestureFeedback(predictor.inputs);
+    }
+
+    public override void ClearWord() {
+        base.ClearWord();
+        extractor.Clear();
+    }
+}
+
+class MixedDecoder : Decoder {
+    public enum MixedDecoderState { Uncertain, Tap, Gesture };
+    const float GESTURE_INPUT_DIST = 0.025f;
+
+    WhiteBoxDepthTapExtractor tapExtractorL, tapExtractorR;
+    NaiveGestureExtractor gestureExtractor;
+    TrieElasticTapPredictor tapPredictor;
+    NaiveGesturePredictor gesturePredictor;
+    MixedDecoderState state;
+    bool gestureInputIsRight;
+
+    // distinguish tap & gesture
+    bool inTypeZoneL, inTypeZoneR;
+    bool ifTouchKeyboard;
+    bool touchKeyboardIsRight;
+    Vector2 firstTouch2D;
+    bool ifTouchKeyboardPlayClickAudio;
+
+    public MixedDecoder() : base() {
+        tapExtractorL = new WhiteBoxDepthTapExtractor();
+        tapExtractorR = new WhiteBoxDepthTapExtractor();
+        gestureExtractor = new NaiveGestureExtractor();
+        tapPredictor = new TrieElasticTapPredictor(keyboard);
+        gesturePredictor = new NaiveGesturePredictor(keyboard);
+        predictor = tapPredictor;
+        ClearWord();
+    }
+
+    public override void Input(Vector4 p, bool isRight, params object[] args) {
+        if (state == MixedDecoderState.Uncertain) {
+            WhiteBoxDepthTapExtractor tapExtractor = !isRight ? tapExtractorL : tapExtractorR;
+            int tapState = tapExtractor.Input(p, args);
+            // detected tap
+            if (tapState == (int)WhiteBoxDepthTapExtractor.TapInputState.LiftUp) {
+                nowWord = tapPredictor.Predict(tapExtractor.target, args);
+                keyboard.DrawTapFeedback(tapPredictor.inputs[tapPredictor.inputs.Count - 1]);
+                if (!ifTouchKeyboardPlayClickAudio) keyboard.PlayClickAudio();
+                state = MixedDecoderState.Tap;
+            }
+            // both finger in type zone: must be tap
+            if (tapState == (int)WhiteBoxDepthTapExtractor.TapInputState.InTypeZone) {
+                if (!isRight) inTypeZoneL = true; else inTypeZoneR = true;
+                if (inTypeZoneL && inTypeZoneR) state = MixedDecoderState.Tap;
+            }
+            // one finger touched keyboard
+            if (tapState == (int)WhiteBoxDepthTapExtractor.TapInputState.TouchKeyboard) {
+                if (!ifTouchKeyboard) {
+                    ifTouchKeyboard = true;
+                    touchKeyboardIsRight = isRight;
+                    firstTouch2D = keyboard.GetTouchPosition(p);
+                    keyboard.PlayClickAudio();
+                    ifTouchKeyboardPlayClickAudio = true;
+                }
+            }
+            // detect if move like gesture
+            if (ifTouchKeyboard && touchKeyboardIsRight == isRight) {
+                gesturePredictor.Predict(p, (int)NaiveGestureExtractor.GestureInputState.Stay);
+                float moveDist = (keyboard.GetTouchPosition(p) - firstTouch2D).magnitude;
+                if (moveDist > GESTURE_INPUT_DIST) {
+                    state = MixedDecoderState.Gesture;
+                }
+            }
+        }
+        else
+        if (state == MixedDecoderState.Tap) {
+            predictor = tapPredictor;
+            WhiteBoxDepthTapExtractor tapExtractor = !isRight ? tapExtractorL : tapExtractorR;
+            int tapState = tapExtractor.Input(p, args);
+            if (tapState == (int)WhiteBoxDepthTapExtractor.TapInputState.LiftUp) {
+                nowWord = tapPredictor.Predict(tapExtractor.target, args);
+                keyboard.DrawTapFeedback(tapPredictor.inputs[tapPredictor.inputs.Count - 1]);
+                keyboard.PlayClickAudio();
+            }
+        }
+        else
+        if (state == MixedDecoderState.Gesture) {
+            predictor = gesturePredictor;
+            if (isRight != gestureInputIsRight && gestureExtractor.state != (int)NaiveGestureExtractor.GestureInputState.None) return;
+            int gestureState = gestureExtractor.Input(p, args);
+            gestureInputIsRight = isRight;
+            nowWord = gesturePredictor.Predict(p, gestureState);
+            if (gestureState == (int)NaiveGestureExtractor.GestureInputState.Exit) keyboard.PlayClickAudio();
+            keyboard.DrawGestureFeedback(gesturePredictor.inputs);
+        }
+    }
+
+    public override void ClearWord() {
+        base.ClearWord();
+        tapExtractorL.Clear();
+        tapExtractorR.Clear();
+        gestureExtractor.Clear();
+        tapPredictor.Clear();
+        gesturePredictor.Clear();
+        keyboard.DrawGestureFeedback(gesturePredictor.inputs);
+        state = MixedDecoderState.Uncertain;
+        inTypeZoneL = inTypeZoneR = false;
+        ifTouchKeyboard = false;
+        ifTouchKeyboardPlayClickAudio = false;
     }
 }

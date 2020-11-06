@@ -5,13 +5,13 @@ using Word = System.Collections.Generic.KeyValuePair<string, double>;
 
 public class Predictor {
     // constant after initialization
-    public const int MAX_WORD_LENGTH = 25;
-    public const int ALPHABET = 26;
-    public Keyboard keyboard;
-    public Vector2[] keys;
-    public Dictionary<string, int> freq = new Dictionary<string, int>();
+    protected const int MAX_WORD_LENGTH = 25;
+    protected const int ALPHABET = 26;
+    protected Keyboard keyboard;
+    protected Vector2[] keys;
+    protected Dictionary<string, int> freq = new Dictionary<string, int>();
 
-    // variables
+    // readable variables
     public List<Word> candidateWords;
     public List<Vector2> inputs;
 
@@ -48,7 +48,7 @@ public class Predictor {
         inputs.Clear();
     }
 
-    public void AddCandidateWordByAscending(Word newWord) {
+    protected void AddCandidateWordByAscending(Word newWord) {
         candidateWords.Add(newWord);
         int k = candidateWords.Count - 1;
         while (k > 0) {
@@ -60,36 +60,16 @@ public class Predictor {
         }
         if (candidateWords.Count > Decoder.N_CANDIDATE) candidateWords.RemoveAt(candidateWords.Count - 1);
     }
-
-    public Vector2 GetSimpleTouchPosition(Vector4 p) {
-        Vector3 finger = new Vector3(p.x, p.y, p.z);
-        Vector3 touch3D = keyboard.SeeThroughPointProjectOnKeyboard(finger);
-        Vector2 touch2D = keyboard.Convert3DTo2DOnKeyboard(touch3D);
-        return touch2D;
-    }
-
-    public Vector2 GetHybridTouchPosition(Vector4 p, Vector2 lastTouchOnKeyboard2D) {
-        Vector2 touch2D = new Vector3(0, 0);
-        if (p.w > 0) {
-            Vector3 finger = new Vector3(p.x, p.y, p.z);
-            Vector3 touch3D = keyboard.SeeThroughPointProjectOnKeyboard(finger);
-            touch2D = keyboard.Convert3DTo2DOnKeyboard(touch3D);
-        } else {
-            touch2D = lastTouchOnKeyboard2D;
-        }
-        return touch2D;
-    }
-
 }
 
 class NaiveTapPredictor : Predictor {
-    public string literalText;
+    protected string literalText;
 
     public NaiveTapPredictor(Keyboard keyboard) : base(keyboard) { }
 
     public override string Predict(Vector4 p, params object[] args) {
-        Vector2 touch2D = GetSimpleTouchPosition(p);
-        UpdateLiteralText(touch2D);
+        Vector2 p2D = keyboard.GetTouchPosition(p);
+        UpdateLiteralText(p2D);
         return literalText;
     }
 
@@ -97,14 +77,14 @@ class NaiveTapPredictor : Predictor {
         base.Clear();
         literalText = "";
     }
-    
-    public void UpdateLiteralText(Vector2 touch2D) {
+
+    protected void UpdateLiteralText(Vector2 p2D) {
         char best = '_';
         float minDist = 1e20f;
         for (int i = 0; i < ALPHABET; i++) {
             Vector2 key = keys[i];
-            if ((key - touch2D).magnitude < minDist) {
-                minDist = (key - touch2D).magnitude;
+            if ((key - p2D).magnitude < minDist) {
+                minDist = (key - p2D).magnitude;
                 best = (char)(i + 'a');
             }
         }
@@ -154,8 +134,8 @@ class RigidTapPredictor : UniformBayesianTapPredictor {
     }
     
     public override string Predict(Vector4 p, params object[] args) {
-        Vector2 touch2D = GetSimpleTouchPosition(p);
-        inputs.Add(touch2D);
+        Vector2 p2D = keyboard.GetTouchPosition(p);
+        inputs.Add(p2D);
         candidateWords.Clear();
         int n = inputs.Count;
         for (int i = 0; i < words[n].Count; i++) {
@@ -171,11 +151,11 @@ class RigidTapPredictor : UniformBayesianTapPredictor {
 }
 
 class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
-    public const int LENGTH_DIFF = 1;
-    public double LOG_INSERT_ERR;
-    public double LOG_OMIT_ERR;
-    public double LOG_SWAP_ERR;
-    public double MAX_LOGP_PER_TOUCH;
+    protected const int LENGTH_DIFF = 1;
+    protected double LOG_INSERT_ERR;
+    protected double LOG_OMIT_ERR;
+    protected double LOG_SWAP_ERR;
+    protected double MAX_LOGP_PER_TOUCH;
 
     public BruteForceElasticTapPredictor(Keyboard keyboard) : base(keyboard) {
         LOG_INSERT_ERR = Math.Log(0.01);
@@ -185,8 +165,8 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
     }
 
     public override string Predict(Vector4 p, params object[] args) {
-        Vector2 touch2D = GetSimpleTouchPosition(p);
-        inputs.Add(touch2D);
+        Vector2 p2D = keyboard.GetTouchPosition(p);
+        inputs.Add(p2D);
         candidateWords.Clear();
         foreach (var item in freq) {
             string candidate = item.Key;
@@ -236,9 +216,9 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
 
 class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
     ElasticTapPredictorTrie root;
-
+    
     public TrieElasticTapPredictor(Keyboard keyboard) : base(keyboard) {
-        // build trie, totally 25508 nodes
+        // build trie, totally 50129 nodes
         root = new ElasticTapPredictorTrie(' ', null);
         foreach (var item in freq) {
             root.Build(item.Key, item.Value);
@@ -248,13 +228,13 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
     }
     
     public override string Predict(Vector4 p, params object[] args) {
-        Vector2 touch2D = GetSimpleTouchPosition(p);
-        UpdateLiteralText(touch2D);
-        inputs.Add(touch2D);
+        Vector2 p2D = keyboard.GetTouchPosition(p);
+        UpdateLiteralText(p2D);
+        inputs.Add(p2D);
         candidateWords.Clear();
-        DateTime d0 = DateTime.Now;
+        DateTime __d0 = DateTime.Now;
         RecursiveUpdate(root, inputs.Count);
-        keyboard.ShowInfo(Math.Round((DateTime.Now - d0).TotalMilliseconds, 3) + " ");
+        keyboard.ShowInfo("time(tap): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
         string top1Word = candidateWords[0].Key;
         candidateWords[0] = new Word(literalText, 0);
         return top1Word;
@@ -287,69 +267,77 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
 }
 
 class NaiveGesturePredictor : Predictor {
-    const int N_SAMPLE = 50;
-    const float EPS = 1e-3f;
-    const double FREQ_WEIGHT = 0.15;
-    const double E_MIN_DIST = 0.5;
-    float keyboardScale;
-    List<Vector2>[] standards;
+    protected const float EPS = 1e-3f;
+    protected const double FREQ_WEIGHT = 0.005;
+    protected const double E_MIN_DIST = 0.003;
+    protected float keyboardScale;
     float[,] dpEM = new float[N_SAMPLE, N_SAMPLE];
-    
+    string nowWord;
+
+    protected const int N_SAMPLE = 50;
+    protected List<Vector2[]> standards;
+
     public NaiveGesturePredictor(Keyboard keyboard) : base(keyboard) {
         keyboardScale = keyboard.keyboardBase.transform.lossyScale.magnitude;
-        standards = new List<Vector2>[keyboard.DictionarySize];
-        int j = 0;
+        standards = new List<Vector2[]>();
         foreach (var item in freq) {
             string candidate = item.Key;
             List<Vector2> wordPoints = new List<Vector2>();
             for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
-            standards[j] = Resample(wordPoints);
-            j++;
+            standards.Add(Resample(wordPoints, N_SAMPLE));
         }
     }
 
     public override string Predict(Vector4 p, params object[] args) {
-        Vector3 touch3D = keyboard.PointProjectOnKeyboard(new Vector3(p.x, p.y, p.z));
-        Vector2 touch2D = keyboard.Convert3DTo2DOnKeyboard(touch3D);
+        Vector2 touch2D = keyboard.GetTouchPosition(p);
         int state = (int)args[0];
         if (state == (int)NaiveGestureExtractor.GestureInputState.Stay) {
             inputs.Add(touch2D);
         }
         if (state == (int)NaiveGestureExtractor.GestureInputState.Exit) {
-            List<Vector2> resampledInputs = Resample(inputs);
-            candidateWords.Clear();
-            int j = 0;
-            foreach (var item in freq) {
-                string candidate = item.Key;
-                double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
-                double score = Math.Log(item.Value) * FREQ_WEIGHT;
-                if (score - E_MIN_DIST < topScore) continue;
-                List<Vector2> standard = standards[j];
-                float dist = RigidMatching(resampledInputs, standard, (float)(score - topScore));
-                score -= dist;
-                AddCandidateWordByAscending(new Word(candidate, score));
-                j++;
-            }
-            return candidateWords[0].Key;
+            nowWord = EnumerateCandidates();
+            return nowWord;
+        }
+        if (state == (int)NaiveGestureExtractor.GestureInputState.WaitForConfirm) {
+            return nowWord;
         }
         return "";
     }
-    
-    public List<Vector2> Resample(List<Vector2> a) {
+
+    public virtual string EnumerateCandidates() {
+        Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
+        candidateWords.Clear();
+        int j = -1;
+        DateTime __d0 = DateTime.Now;
+        foreach (var item in freq) {
+            j++;
+            string candidate = item.Key;
+            double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
+            double score = Math.Log(item.Value) * FREQ_WEIGHT;
+            if (score - E_MIN_DIST < topScore) continue;
+            float dist = ElasticMatching(resampledInputs, standards[j], (float)(score - topScore));
+            score -= dist;
+            AddCandidateWordByAscending(new Word(candidate, score));
+        }
+        keyboard.ShowInfo("time(gesture): " + Math.Round((DateTime.Now - __d0).TotalMilliseconds, 3));
+        return candidateWords[0].Key;
+    }
+
+    protected Vector2[] Resample(List<Vector2> a, int nSample) {
         // calculate stride
         float length = 0;
         for (int i = 1; i < a.Count; i++) length += (a[i] - a[i - 1]).magnitude;
-        float stride = length / (N_SAMPLE - 1);
+        float stride = length / (nSample - 1);
         // gesture with only one position
         List<Vector2> b = new List<Vector2>();
         if (length < EPS) {
-            for (int i = 0; i < N_SAMPLE; i++) b.Add(a[0]);
-            return b;
+            for (int i = 0; i < nSample; i++) b.Add(a[0]);
+            return b.ToArray();
         }
         // resample normal gesture
         b.Add(a[0]);
         float currentLength = 0;
-        for (int i = 1, j = 1; i < N_SAMPLE; i++) {
+        for (int i = 1, j = 1; i < nSample; i++) {
             float targetLength = i * stride;
             float currentSpan = 0;
             while (j < a.Count) {
@@ -361,34 +349,130 @@ class NaiveGesturePredictor : Predictor {
             Vector2 now = Vector2.Lerp(a[j - 1], a[j], (targetLength - currentLength) / currentSpan);
             b.Add(now);
         }
-        return b;
+        return b.ToArray();
     }
-    
-    public float ElasticMatching(List<Vector2> a, List<Vector2> b, float maxThres = 1e20f, int K = 5) {
-        for (int i = 0; i < N_SAMPLE; i++) {
+
+    protected float ElasticMatching(Vector2[] a, Vector2[] b, float maxThres = 1e20f, int K = 5) {
+        int n = a.Length;
+        for (int i = 0; i < n; i++) {
             int jS = Math.Max(i - K, 0);
-            int jT = Math.Min(i + K, N_SAMPLE - 1);
+            int jT = Math.Min(i + K, n - 1);
             float minValue = 1e20f;
             for (int j = jS; j <= jT; j++) {
                 dpEM[i, j] = (i == 0 && j == 0) ? 0 : 1e20f;
                 if (i > 0 && j - (i - 1) <= K) dpEM[i, j] = Math.Min(dpEM[i, j], dpEM[i - 1, j]);
                 if (j > 0 && i - (j - 1) <= K) dpEM[i, j] = Math.Min(dpEM[i, j], dpEM[i, j - 1]);
                 if (i > 0 && j > 0) dpEM[i, j] = Math.Min(dpEM[i, j], dpEM[i - 1, j - 1]);
-                dpEM[i, j] += (a[i] - b[j]).magnitude;
+                dpEM[i, j] += (a[i] - b[j]).sqrMagnitude;
                 minValue = Math.Min(minValue, dpEM[i, j]);
             }
             if (minValue / keyboardScale > maxThres) return 1e20f;
         }
-        return dpEM[N_SAMPLE - 1, N_SAMPLE - 1] / keyboardScale;
+        return dpEM[n - 1, n - 1] / keyboardScale;
     }
 
-    public float RigidMatching(List<Vector2> a, List<Vector2> b, float maxThres = 1e20f) {
-        maxThres /= keyboardScale;
+    protected float RigidMatching(Vector2[] a, Vector2[] b) {
+        int n = a.Length;
         float dist = 0;
-        for (int i = 0; i < N_SAMPLE; i++) {
-            dist += (a[i] - b[i]).magnitude;
+        for (int i = 0; i < n; i++) {
+            dist += (a[i] - b[i]).sqrMagnitude;
+        }
+        return dist / keyboardScale;
+    }
+
+    protected float RigidMatching(Vector2[] a, Vector2[] b, float maxThres = 1e20f) {
+        int n = a.Length;
+        float dist = 0;
+        for (int i = 0; i < n; i++) {
+            dist += (a[i] - b[i]).sqrMagnitude;
             if (dist > maxThres) return 1e20f;
         }
         return dist / keyboardScale;
+    }
+}
+
+class TwoLevelGesturePredictor : NaiveGesturePredictor {
+    class FirstLevelItem : IComparable<FirstLevelItem> {
+        public string candidate;
+        public int freq;
+        public int index;
+        public double value;
+
+        public FirstLevelItem(string candidate, int freq, int index, double value) {
+            this.candidate = candidate;
+            this.freq = freq;
+            this.index = index;
+            this.value = value;
+        }
+
+        public int CompareTo(FirstLevelItem obj) {
+            return value - obj.value > 0 ? 1 : -1;
+        }
+    }
+
+    const int N_SAMPLE_L1 = 10;
+    const int N_CANDIDATE_L1 = 100;
+    List<Vector2[]> standardsL1;
+
+    public TwoLevelGesturePredictor(Keyboard keyboard) : base(keyboard) {
+        standardsL1 = new List<Vector2[]>();
+        foreach (var item in freq) {
+            string candidate = item.Key;
+            List<Vector2> wordPoints = new List<Vector2>();
+            for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
+            standardsL1.Add(Resample(wordPoints, N_SAMPLE_L1));
+        }
+    }
+
+    public override string EnumerateCandidates() {
+        DateTime __d0 = DateTime.Now;
+        // first level
+        Vector2[] resampledInputsL1 = Resample(inputs, N_SAMPLE_L1);
+        int j = -1;
+        List<FirstLevelItem> items = new List<FirstLevelItem>();
+        foreach (var item in freq) {
+            j++;
+            float dist = RigidMatching(resampledInputsL1, standardsL1[j]);
+            items.Add(new FirstLevelItem(item.Key, item.Value, j, dist));
+        }
+        DateTime __d1 = DateTime.Now;
+        try {
+            //GetTopCandidatesByMergeSort(items, 0, items.Count);
+            DateTime __d2 = DateTime.Now;
+            // second level
+            Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
+            candidateWords.Clear();
+            //while (heap.Count > 0) {
+            //    FirstLevelItem item = heap.Dequeue();
+            for (int i = 0; i < N_CANDIDATE_L1; i++) {
+                FirstLevelItem item = items[i];
+                string candidate = item.candidate;
+                double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
+                double score = Math.Log(item.freq) * FREQ_WEIGHT;
+                if (score - E_MIN_DIST < topScore) continue;
+                float dist = ElasticMatching(resampledInputs, standards[item.index], (float)(score - topScore));
+                score -= dist;
+                AddCandidateWordByAscending(new Word(candidate, score));
+            }
+            DateTime __d3 = DateTime.Now;
+            keyboard.ShowInfo("time(g2): " + Math.Round((__d1 - __d0).TotalMilliseconds, 3) + " " + Math.Round((__d2 - __d1).TotalMilliseconds) + " " + Math.Round((__d3 - __d2).TotalMilliseconds));
+        } catch (Exception e) {
+            keyboard.ShowInfo(e.ToString());
+        }
+        return candidateWords[0].Key;
+    }
+    
+    void GetTopCandidatesByMergeSort(List<FirstLevelItem> items, int l, int r) {
+        if (!(l < N_CANDIDATE_L1 / 2 && r > N_CANDIDATE_L1)) return;
+        FirstLevelItem anchor = items[l];
+        FirstLevelItem[] tmp = new FirstLevelItem[r - l];
+        int ll = 0, rr = r - l - 1;
+        for (int i = l + 1; i < r; i++) {
+            if (items[i].value < anchor.value) tmp[ll++] = items[i]; else tmp[rr--] = items[i];
+        }
+        tmp[ll] = anchor;
+        for (int i = l; i < r; i++) items[i] = tmp[i - l];
+        GetTopCandidatesByMergeSort(items, l, ll);
+        GetTopCandidatesByMergeSort(items, ll + 1, r);
     }
 }

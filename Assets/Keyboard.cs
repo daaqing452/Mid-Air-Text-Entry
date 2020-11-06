@@ -145,6 +145,10 @@ public class Keyboard : MonoBehaviour
         info.text = s;
     }
 
+    public void AppendInfo(string s) {
+        info.text += "\n" + s;
+    }
+
     void UpdateKeyboardContent() {
         string outputString = "";
         List<string> candidates = new List<string>();

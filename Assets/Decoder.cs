@@ -139,7 +139,7 @@ class MixedDecoder : Decoder {
         tapExtractorR = new WhiteBoxDepthTapExtractor();
         gestureExtractor = new NaiveGestureExtractor();
         tapPredictor = new TrieElasticTapPredictor(keyboard);
-        gesturePredictor = new NaiveGesturePredictor(keyboard);
+        gesturePredictor = new TwoLevelGesturePredictor(keyboard);
         predictor = tapPredictor;
         ClearWord();
     }

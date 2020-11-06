@@ -435,44 +435,36 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
             float dist = RigidMatching(resampledInputsL1, standardsL1[j]);
             items.Add(new FirstLevelItem(item.Key, item.Value, j, dist));
         }
-        DateTime __d1 = DateTime.Now;
-        try {
-            //GetTopCandidatesByMergeSort(items, 0, items.Count);
-            DateTime __d2 = DateTime.Now;
-            // second level
-            Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
-            candidateWords.Clear();
-            //while (heap.Count > 0) {
-            //    FirstLevelItem item = heap.Dequeue();
-            for (int i = 0; i < N_CANDIDATE_L1; i++) {
-                FirstLevelItem item = items[i];
-                string candidate = item.candidate;
-                double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
-                double score = Math.Log(item.freq) * FREQ_WEIGHT;
-                if (score - E_MIN_DIST < topScore) continue;
-                float dist = ElasticMatching(resampledInputs, standards[item.index], (float)(score - topScore));
-                score -= dist;
-                AddCandidateWordByAscending(new Word(candidate, score));
-            }
-            DateTime __d3 = DateTime.Now;
-            keyboard.ShowInfo("time(g2): " + Math.Round((__d1 - __d0).TotalMilliseconds, 3) + " " + Math.Round((__d2 - __d1).TotalMilliseconds) + " " + Math.Round((__d3 - __d2).TotalMilliseconds));
-        } catch (Exception e) {
-            keyboard.ShowInfo(e.ToString());
+        GetTopCandidatesByMergeSort(items, 0, items.Count);
+        // second level
+        Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
+        candidateWords.Clear();
+        for (int i = 0; i < N_CANDIDATE_L1; i++) {
+            FirstLevelItem item = items[i];
+            string candidate = item.candidate;
+            double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
+            double score = Math.Log(item.freq) * FREQ_WEIGHT;
+            if (score - E_MIN_DIST < topScore) continue;
+            float dist = ElasticMatching(resampledInputs, standards[item.index], (float)(score - topScore));
+            score -= dist;
+            AddCandidateWordByAscending(new Word(candidate, score));
         }
+        DateTime __d3 = DateTime.Now;
+        keyboard.ShowInfo("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
         return candidateWords[0].Key;
     }
     
-    void GetTopCandidatesByMergeSort(List<FirstLevelItem> items, int l, int r) {
+    void GetTopCandidatesByMergeSort(List<FirstLevelItem> items, int l, int r, int d = 0) {
         if (!(l < N_CANDIDATE_L1 / 2 && r > N_CANDIDATE_L1)) return;
         FirstLevelItem anchor = items[l];
         FirstLevelItem[] tmp = new FirstLevelItem[r - l];
-        int ll = 0, rr = r - l - 1;
+        int ml = l, mr = r;
         for (int i = l + 1; i < r; i++) {
-            if (items[i].value < anchor.value) tmp[ll++] = items[i]; else tmp[rr--] = items[i];
+            if (items[i].value < anchor.value) tmp[(ml++) - l] = items[i]; else tmp[(--mr) - l] = items[i];
         }
-        tmp[ll] = anchor;
+        tmp[ml - l] = anchor;
         for (int i = l; i < r; i++) items[i] = tmp[i - l];
-        GetTopCandidatesByMergeSort(items, l, ll);
-        GetTopCandidatesByMergeSort(items, ll + 1, r);
+        GetTopCandidatesByMergeSort(items, l, ml, d + 1);
+        GetTopCandidatesByMergeSort(items, mr, r, d + 1);
     }
 }

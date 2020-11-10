@@ -3,7 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class Extractor {
-    public Extractor() { }
+    protected Keyboard keyboard;
+
+    public Extractor(Keyboard keyboard) {
+        this.keyboard = keyboard;
+    }
 
     ~Extractor() {
         Clear();
@@ -27,7 +31,7 @@ class WhiteBoxDepthTapExtractor : Extractor {
     float minD;
     public Vector4 target;
 
-    public WhiteBoxDepthTapExtractor() : base() {
+    public WhiteBoxDepthTapExtractor(Keyboard keyboard) : base(keyboard) {
         ps = new List<Vector4>();
         dd = new List<float>();
         Clear();
@@ -57,7 +61,7 @@ class WhiteBoxDepthTapExtractor : Extractor {
         ps.Add(p);
         dd.Add(nowDD);
         // tap down
-        if (nowDD < -DD_THRES) {
+        if (nowDD < -DD_THRES && ps.Count >= 2 && ps[ps.Count - 2].w < TYPE_ZONE_HEIGHT) {
             // tap down when successive tap
             /*if (r != -1) {
                 if (l != -1) {
@@ -102,7 +106,7 @@ class NaiveGestureExtractor : Extractor {
     public int state;
     bool gestureTyping = false;
 
-    public NaiveGestureExtractor() : base() {
+    public NaiveGestureExtractor(Keyboard keyboard) : base(keyboard) {
         state = (int)GestureInputState.None;
     }
 

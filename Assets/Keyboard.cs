@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 
 public class Keyboard : MonoBehaviour
@@ -60,8 +59,9 @@ public class Keyboard : MonoBehaviour
     Decoder decoder;
 
     // lexicon
-    Lexicon lexiconDictEnglish;
-    Lexicon lexiconDictPinyin;
+    Lexicon lexiconEnglish;
+    Lexicon lexiconPinyin;
+    Lexicon lexiconChinese;
     
     // log
     bool logging = true;
@@ -93,17 +93,18 @@ public class Keyboard : MonoBehaviour
 
         // load phrases and lexicon
         phrases = XFileManager.ReadLines("phrases2.txt");
-        lexiconDictEnglish = new Dictionary<string, int>();
+        lexiconEnglish = new Lexicon();
         string[] anc = XFileManager.ReadLines("ANC.txt");
         for (int i = 0; i < DictionarySize; i++) {
             string[] ssp = anc[i].Split(' ');
-            lexiconDictEnglish[ssp[0]] = int.Parse(ssp[1]);
+            lexiconEnglish.AddUnigram(ssp[0], int.Parse(ssp[1]));
         }
-        lexiconDictPinyin = new Dictionary<string, int>();
+        lexiconPinyin = new Lexicon();
+        lexiconChinese = new Lexicon();
         string[] chn = XFileManager.ReadLines("dict_chn_pinyin.txt");
         for (int i = 0; i < DictionarySize; i++) {
             string[] ssp = chn[i].Split(' ');
-            lexiconDictPinyin[ssp[0]] = int.Parse(ssp[1]);
+            lexiconPinyin.AddUnigram(ssp[0], int.Parse(ssp[1]));
         }
         
         // init log
@@ -154,6 +155,7 @@ public class Keyboard : MonoBehaviour
             case "Output Clear":
                 decoder.ClearAll();
                 UpdateKeyboardContent();
+                InfoShow("");
                 break;
             case "Delete Key":
                 decoder.Erase();
@@ -219,7 +221,7 @@ public class Keyboard : MonoBehaviour
         ifSelectingCandidate = false;
     }
 
-    bool DisableInput() {
+    public bool DisableInput() {
         return ifSelectingCandidate;
     }
 
@@ -274,11 +276,11 @@ public class Keyboard : MonoBehaviour
         uPinyinLexicon.material.color = Color.white;
         if (lexicon == LexiconType.English) {
             uEnglishLexicon.material.color = Color.yellow;
-            decoder.ReloadLexicon(lexiconDictEnglish);
+            decoder.ReloadLexicon(lexiconEnglish);
         }
         if (lexicon == LexiconType.Pinyin) {
             uPinyinLexicon.material.color = Color.yellow;
-            decoder.ReloadLexicon(lexiconDictPinyin);
+            decoder.ReloadLexicon(lexiconPinyin);
         }
     }
 

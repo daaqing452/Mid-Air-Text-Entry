@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Word = System.Collections.Generic.KeyValuePair<string, double>;
-using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 public class Predictor {
     // constant after initialization
@@ -127,7 +126,7 @@ class RigidTapPredictor : UniformBayesianTapPredictor {
         int n = inputs.Count;
         for (int i = 0; i < words[n].Count; i++) {
             string candidate = words[n][i];
-            double logP = Math.Log(lexicon[candidate]);
+            double logP = Math.Log(lexicon.unigram[candidate]);
             for (int j = 0; j < n; j++) {
                 logP += LogPUniformTouch(inputs[j], keys[candidate[j] - 'a']);
             }
@@ -140,7 +139,7 @@ class RigidTapPredictor : UniformBayesianTapPredictor {
         base.ReloadLexicon(lexicon);
         words = new List<string>[MAX_WORD_LENGTH];
         for (int i = 0; i < MAX_WORD_LENGTH; i++) words[i] = new List<string>();
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             string word = item.Key;
             words[word.Length].Add(word);
         }
@@ -165,7 +164,7 @@ class BruteForceElasticTapPredictor : UniformBayesianTapPredictor {
         Vector2 p2D = keyboard.GetTouchPosition(p);
         inputs.Add(p2D);
         candidateWords.Clear();
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             string candidate = item.Key;
             // ignore too much difference in length
             if (Math.Abs(candidate.Length - inputs.Count) > LENGTH_DIFF) continue;
@@ -244,9 +243,9 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
             // swapping error
             if (g != null && n >= 2) u.dp[n] = Math.Max(u.dp[n], g.dp[n - 2] + LogPUniformTouch(inputs[n - 2], keys[u.c - 'a']) + LogPUniformTouch(inputs[n - 1], keys[p.c - 'a']) + LOG_SWAP_ERR);
             // update result
-            if (u.isEndOfWord) {
-                double logP = u.dp[n] + u.logFreq;
-                AddCandidateWordByAscending(new Word(u.candidate, logP));
+            foreach (LexiconItem item in u.candidates) {
+                double logP = u.dp[n] + item.value;
+                AddCandidateWordByAscending(new Word(item.outside, logP));
             }
         }
         foreach (var item in u.children) {
@@ -254,23 +253,13 @@ class TrieElasticTapPredictor : BruteForceElasticTapPredictor {
         }
     }
 
-    public override int GetHashCode() {
-        return base.GetHashCode();
-        // build trie, totally 50129 nodes
-        root = new ElasticTapPredictorTrie(' ', null);
-        foreach (var item in lexicon) {
-            root.Build(item.Key, item.Value);
-        }
-        RecursiveUpdate(root, 0);
-        candidateWords.Clear();
-    }
-
     public override void ReloadLexicon(Lexicon lexicon) {
         base.ReloadLexicon(lexicon);
         // build trie, totally 50129 nodes
         root = new ElasticTapPredictorTrie(' ', null);
-        foreach (var item in lexicon) {
-            root.Build(item.Key, item.Value);
+        foreach (var item in lexicon.unigram) {
+            string candidate = item.Key;
+            root.Build(new LexiconItem(candidate, Math.Log(item.Value), lexicon.inout[candidate]));
         }
         RecursiveUpdate(root, 0);
         candidateWords.Clear();
@@ -313,7 +302,7 @@ class NaiveGesturePredictor : Predictor {
         Vector2[] resampledInputs = Resample(inputs, N_SAMPLE);
         candidateWords.Clear();
         int j = -1;
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             j++;
             string candidate = item.Key;
             double topScore = (candidateWords.Count < Decoder.N_CANDIDATE) ? -1e20 : candidateWords[candidateWords.Count - 1].Value;
@@ -397,7 +386,7 @@ class NaiveGesturePredictor : Predictor {
     public override void ReloadLexicon(Lexicon lexicon) {
         base.ReloadLexicon(lexicon);
         standards = new List<Vector2[]>();
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             string candidate = item.Key;
             List<Vector2> wordPoints = new List<Vector2>();
             for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);
@@ -409,11 +398,11 @@ class NaiveGesturePredictor : Predictor {
 class TwoLevelGesturePredictor : NaiveGesturePredictor {
     class FirstLevelItem : IComparable<FirstLevelItem> {
         public string candidate;
-        public int freq;
+        public double freq;
         public int index;
         public double value;
 
-        public FirstLevelItem(string candidate, int freq, int index, double value) {
+        public FirstLevelItem(string candidate, double freq, int index, double value) {
             this.candidate = candidate;
             this.freq = freq;
             this.index = index;
@@ -437,7 +426,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
         Vector2[] resampledInputsL1 = Resample(inputs, N_SAMPLE_L1);
         int j = -1;
         List<FirstLevelItem> items = new List<FirstLevelItem>();
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             j++;
             float dist = RigidMatching(resampledInputsL1, standardsL1[j]);
             items.Add(new FirstLevelItem(item.Key, item.Value, j, dist));
@@ -454,7 +443,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
             if (score - E_MIN_DIST < topScore) continue;
             float dist = ElasticMatching(resampledInputs, standards[item.index], (float)(score - topScore));
             score -= dist;
-            AddCandidateWordByAscending(new Word(candidate, score));
+            AddCandidateWordByAscending(new Word(lexicon.inout[candidate], score));
         }
         DateTime __d3 = DateTime.Now;
         if (keyboard.ShowPredictionTime) keyboard.InfoShow("time(gesture): " + Math.Round((__d3 - __d0).TotalMilliseconds, 3));
@@ -478,7 +467,7 @@ class TwoLevelGesturePredictor : NaiveGesturePredictor {
     public override void ReloadLexicon(Lexicon lexicon) {
         base.ReloadLexicon(lexicon);
         standardsL1 = new List<Vector2[]>();
-        foreach (var item in lexicon) {
+        foreach (var item in lexicon.unigram) {
             string candidate = item.Key;
             List<Vector2> wordPoints = new List<Vector2>();
             for (int i = 0; i < candidate.Length; i++) wordPoints.Add(keys[candidate[i] - 'a']);

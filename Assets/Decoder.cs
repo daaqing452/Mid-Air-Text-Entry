@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using Lexicon = System.Collections.Generic.Dictionary<string, int>;
 
 public class Decoder {
     public static int N_CANDIDATE = 5;
@@ -73,12 +72,13 @@ class TapDecoder : Decoder {
     WhiteBoxDepthTapExtractor extractorL, extractorR;
 
     public TapDecoder() : base() {
-        extractorL = new WhiteBoxDepthTapExtractor();
-        extractorR = new WhiteBoxDepthTapExtractor();
+        extractorL = new WhiteBoxDepthTapExtractor(keyboard);
+        extractorR = new WhiteBoxDepthTapExtractor(keyboard);
         predictor = new TrieElasticTapPredictor(keyboard);
     }
 
     public override void Input(Vector4 p, bool isRight, params object[] args) {
+        if (keyboard.DisableInput()) return;
         WhiteBoxDepthTapExtractor extractor = !isRight ? extractorL : extractorR;
         int state = extractor.Input(p, args);
         if (state == (int)WhiteBoxDepthTapExtractor.TapInputState.LiftUp) {
@@ -100,11 +100,12 @@ class GestureDecoder : Decoder {
     bool nowIsRight;
 
     public GestureDecoder() : base() {
-        extractor = new NaiveGestureExtractor();
+        extractor = new NaiveGestureExtractor(keyboard);
         predictor = new TwoLevelGesturePredictor(keyboard);
     }
 
     public override void Input(Vector4 p, bool isRight, params object[] args) {
+        if (keyboard.DisableInput()) return;
         // one finger cannot bother the other finger
         if (isRight != nowIsRight && extractor.state != (int)NaiveGestureExtractor.GestureInputState.None) return;
         int state = extractor.Input(p, args);
@@ -139,9 +140,9 @@ class MixedDecoder : Decoder {
     bool ifTouchKeyboardPlayClickAudio;
 
     public MixedDecoder() : base() {
-        tapExtractorL = new WhiteBoxDepthTapExtractor();
-        tapExtractorR = new WhiteBoxDepthTapExtractor();
-        gestureExtractor = new NaiveGestureExtractor();
+        tapExtractorL = new WhiteBoxDepthTapExtractor(keyboard);
+        tapExtractorR = new WhiteBoxDepthTapExtractor(keyboard);
+        gestureExtractor = new NaiveGestureExtractor(keyboard);
         tapPredictor = new TrieElasticTapPredictor(keyboard);
         gesturePredictor = new TwoLevelGesturePredictor(keyboard);
         predictor = tapPredictor;

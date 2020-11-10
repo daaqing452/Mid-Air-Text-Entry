@@ -220,6 +220,7 @@
     <Compile Include="Assets\Oculus\Spatializer\scripts\helpers\ONSPReflectionZone.cs" />
     <Compile Include="Assets\Predictor.cs" />
     <Compile Include="Assets\Touch.cs" />
+    <Compile Include="Assets\Utils\Lexicon.cs" />
     <Compile Include="Assets\Utils\PriorityQueue.cs" />
     <Compile Include="Assets\Utils\Trie.cs" />
     <Compile Include="Assets\Utils\XFileManager.cs" />
